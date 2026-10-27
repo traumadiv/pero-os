@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Pero installer icon
+Exec=pero-installer-icon
+NoDisplay=true
+OnlyShowIn=XFCE;

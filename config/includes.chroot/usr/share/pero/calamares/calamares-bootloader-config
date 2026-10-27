@@ -1,0 +1,34 @@
+#!/bin/bash
+# Pero OS: replaces Debian's helper so 32-bit UEFI tablets (Cherry Trail /
+# Bay Trail with a 64-bit CPU) get grub-efi-ia32 instead of grub-efi-amd64.
+
+CHROOT=$(mount | grep proc | grep calamares | awk '{print $3}' | sed -e "s#/proc##g")
+
+if [ "$(mount | grep $CHROOT" " | cut -c -16)" = "/dev/mapper/luks" ]; then
+    echo "UMASK=0077" > $CHROOT/etc/initramfs-tools/conf.d/initramfs-permissions
+    chroot $CHROOT apt-get -y install cryptsetup-initramfs cryptsetup keyutils
+fi
+
+echo "Running bootloader-config..."
+
+export DEBIAN_FRONTEND=noninteractive
+# The GRUB flavours conflict with each other, so the image carries all of them
+# as plain .deb files and only the one this machine needs gets installed.
+DEBS=/usr/share/pero/debs
+deb() { ls $CHROOT$DEBS/${1}_*.deb 2>/dev/null | head -n1 | sed "s#^$CHROOT##"; }
+
+if [ -d /sys/firmware/efi/efivars ]; then
+    if [ "$(cat /sys/firmware/efi/fw_platform_size 2>/dev/null)" = "32" ]; then
+        echo " * Installing grub-efi-ia32 (32-bit UEFI)..."
+        chroot $CHROOT apt-get -y install $(deb grub2-common) $(deb grub-efi-ia32)
+    else
+        echo " * Installing grub-efi-amd64 (64-bit UEFI)..."
+        chroot $CHROOT apt-get -y install $(deb grub2-common) $(deb grub-efi-amd64) $(deb grub-efi-amd64-signed)
+    fi
+else
+    echo " * Installing grub-pc (BIOS)..."
+    chroot $CHROOT apt-get -y install $(deb grub2-common) $(deb grub-pc)
+fi
+
+sed -i "s/#GRUB_DISABLE_OS_PROBER=false/# OS_PROBER re-enabled by Pero OS installer:\nGRUB_DISABLE_OS_PROBER=false/g" $CHROOT/etc/default/grub
+chroot $CHROOT /usr/sbin/update-grub

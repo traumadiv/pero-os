@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=On-screen keyboard
+Name[ru]=Экранная клавиатура
+Comment=Onboard starts hidden and pops up when a text field gets focus
+Exec=onboard --startup-delay=2.0
+Icon=onboard
+NoDisplay=true
+OnlyShowIn=XFCE;

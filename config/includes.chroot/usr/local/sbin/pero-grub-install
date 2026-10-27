@@ -1,0 +1,10 @@
+#!/bin/sh
+# pero-grub-install — grub-install for Calamares that survives tablet firmware.
+# Cherry Trail 32-bit UEFI (and OVMF ia32 under a 64-bit kernel) often refuse
+# EFI variable writes. The files are fine then, only the NVRAM entry is missing,
+# so retry without it: Calamares' installEFIFallback puts the loader at
+# EFI/BOOT/BOOT*.EFI, which the firmware boots on its own.
+
+grub-install "$@" && exit 0
+echo "pero-grub-install: NVRAM write failed, retrying with --no-nvram" >&2
+exec grub-install "$@" --no-nvram

@@ -1,0 +1,5 @@
+// Never stop on conffile questions while the image is built or updated unattended.
+Dpkg::Options {
+   "--force-confdef";
+   "--force-confold";
+};

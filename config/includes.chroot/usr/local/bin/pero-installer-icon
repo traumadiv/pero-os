@@ -1,0 +1,32 @@
+#!/bin/bash
+# pero-installer-icon — put a trusted "Install Pero OS" launcher on the desktop
+# of the live session. Replaces Debian's add-calamares-desktop-icon, which races
+# with xdg-user-dirs on localized systems (~/Desktop vs ~/Рабочий стол).
+
+[ -d /run/live/medium ] || exit 0
+
+# The live user has no known password: never lock or blank during a long install
+xset s off -dpms
+(sleep 10; pkill -x light-locker) &
+
+xdg-user-dirs-update
+DESKTOP=$(xdg-user-dir DESKTOP)
+[ "$DESKTOP" = "$HOME" ] && DESKTOP="$HOME/Desktop"
+mkdir -p "$DESKTOP"
+
+F="$DESKTOP/pero-install.desktop"
+cat >"$F" <<'EOF'
+[Desktop Entry]
+Type=Application
+Name=Install Pero OS
+Name[ru]=Установить Pero OS
+Comment=Install the system to this tablet
+Comment[ru]=Установить систему на планшет
+Exec=pero-install
+Icon=pero-logo
+Terminal=false
+EOF
+chmod +x "$F"
+gio set --type=string "$F" metadata::trusted true 2>/dev/null
+gio set --type=string "$F" metadata::xfce-exe-checksum "$(sha256sum "$F" | cut -d' ' -f1)" 2>/dev/null
+touch "$F"

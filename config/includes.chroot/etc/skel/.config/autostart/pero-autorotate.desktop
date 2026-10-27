@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Pero auto-rotate
+Comment=Rotate the screen with the tablet
+Exec=pero-autorotate
+NoDisplay=true
+OnlyShowIn=XFCE;
+X-XFCE-Autostart-Override=true

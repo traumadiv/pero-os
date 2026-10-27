@@ -1,0 +1,41 @@
+---
+componentName:   pero
+
+welcomeStyleCalamares: true
+welcomeExpandingLogo: true
+
+windowExpanding: normal
+windowSize: 1000px,620px
+windowPlacement: center
+
+strings:
+    productName:         Pero OS
+    shortProductName:    Pero
+    version:             1.0
+    shortVersion:        1.0
+    versionedName:       Pero OS 1.0
+    shortVersionedName:  Pero 1.0
+    bootloaderEntryName: Pero
+    productUrl:          https://www.debian.org
+    supportUrl:          https://www.debian.org/support
+    knownIssuesUrl:      https://bugs.debian.org
+    releaseNotesUrl:     https://www.debian.org/releases/trixie/releasenotes
+
+sidebar: widget
+navigation: widget
+
+images:
+    productLogo:         "logo.png"
+    productIcon:         "logo.png"
+    productWelcome:      "welcome.png"
+
+slideshow:
+    - "slide1.png"
+
+style:
+   SidebarBackground:        "#141414"
+   SidebarText:              "#bdbdbd"
+   SidebarTextCurrent:       "#ffffff"
+   SidebarBackgroundCurrent: "#2a2a2a"
+
+slideshowAPI: 1

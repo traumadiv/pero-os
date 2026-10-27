@@ -1,0 +1,4 @@
+# Everything here runs on Linux: keep LF even in a Windows checkout
+* text=auto eol=lf
+*.ps1 text eol=crlf
+*.png binary

@@ -1,0 +1,22 @@
+#!/bin/bash
+# pero-autorotate — follow the accelerometer (iio-sensor-proxy) and rotate the
+# screen with pero-rotate. Started from XFCE autostart; exits quietly when the
+# tablet has no usable accelerometer.
+
+LOCK="$HOME/.config/pero/rotation-lock"
+command -v monitor-sensor >/dev/null || exit 0
+
+# Align touch with the screen once at login, whatever the sensor says.
+pero-rotate remap
+
+last=""
+monitor-sensor 2>/dev/null | while read -r line; do
+	case "$line" in
+		*"No accelerometer"*) exit 0 ;;
+	esac
+	o=$(grep -oP 'orientation(:| changed:) \K(normal|left-up|right-up|bottom-up)' <<<"$line") || continue
+	[ "$o" = "$last" ] && continue
+	last=$o
+	[ -e "$LOCK" ] && continue
+	pero-rotate "$o"
+done

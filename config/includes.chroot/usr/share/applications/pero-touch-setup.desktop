@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Touchscreen setup
+Name[ru]=Настройка сенсора
+Comment=Install Silead touchscreen firmware from the Windows driver
+Comment[ru]=Взять прошивку сенсора Silead из драйвера Windows
+Exec=xfce4-terminal --hold -x pero-touch-setup
+Icon=input-touchscreen
+Terminal=false
+Categories=System;Settings;

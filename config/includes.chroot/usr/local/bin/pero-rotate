@@ -1,0 +1,83 @@
+#!/bin/bash
+# pero-rotate — rotate the built-in screen and keep touch/pen input aligned.
+#
+#   pero-rotate normal|left-up|right-up|bottom-up   set orientation (iio-sensor-proxy names)
+#   pero-rotate next                                rotate 90° clockwise
+#   pero-rotate lock                                toggle auto-rotation lock
+#   pero-rotate remap                               only re-map touch/pen to the screen
+#
+# If the panel is mounted sideways (common on Chinese tablets), put 0..3 into
+# ~/.config/pero/rotation-offset (or /etc/pero/rotation-offset) — each step is +90°.
+
+CONF="$HOME/.config/pero"
+LOCK="$CONF/rotation-lock"
+STATE="$CONF/rotation-current"
+mkdir -p "$CONF"
+
+ROTS=(normal left inverted right)
+
+internal_output() {
+	local out
+	out=$(xrandr --query | awk '/ connected/ && $1 ~ /^(DSI|eDP|LVDS)/ {print $1; exit}')
+	[ -z "$out" ] && out=$(xrandr --query | awk '/ connected/ {print $1; exit}')
+	echo "$out"
+}
+
+offset() {
+	local f
+	for f in "$CONF/rotation-offset" /etc/pero/rotation-offset; do
+		[ -r "$f" ] && { tr -dc '0-3' <"$f" | head -c1; return; }
+	done
+	echo 0
+}
+
+# Absolute input devices (touchscreen, stylus) are the ones libinput exposes a
+# calibration matrix for; relative mice/touchpads never get one.
+absolute_devices() {
+	xinput list --id-only 2>/dev/null | while read -r id; do
+		xinput list-props "$id" 2>/dev/null | grep -q 'libinput Calibration Matrix' && echo "$id"
+	done
+}
+
+remap() {
+	local out=$1 id
+	for id in $(absolute_devices); do
+		xinput map-to-output "$id" "$out" 2>/dev/null
+	done
+}
+
+apply() {
+	local idx=$1 out
+	out=$(internal_output)
+	[ -z "$out" ] && exit 1
+	idx=$(( (idx + $(offset)) % 4 ))
+	xrandr --output "$out" --rotate "${ROTS[$idx]}"
+	remap "$out"
+	echo "$1" >"$STATE"
+}
+
+case "$1" in
+	normal)    apply 0 ;;
+	left-up)   apply 1 ;;
+	bottom-up) apply 2 ;;
+	right-up)  apply 3 ;;
+	next)
+		cur=$(cat "$STATE" 2>/dev/null || echo 0)
+		# clockwise: normal -> right -> inverted -> left
+		apply $(( (cur + 3) % 4 ))
+		;;
+	lock)
+		if [ -e "$LOCK" ]; then
+			rm -f "$LOCK"
+			notify-send -i rotation-allowed-symbolic "Автоповорот включён" 2>/dev/null
+		else
+			touch "$LOCK"
+			notify-send -i rotation-locked-symbolic "Автоповорот заблокирован" 2>/dev/null
+		fi
+		;;
+	remap) remap "$(internal_output)" ;;
+	*)
+		sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//'
+		exit 1
+		;;
+esac

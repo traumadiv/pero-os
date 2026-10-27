@@ -1,0 +1,4 @@
+# Pero OS: compressed swap in RAM — eMMC is slow and wears out, 4 GB RAM goes further.
+ALGO=zstd
+PERCENT=50
+PRIORITY=100

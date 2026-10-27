@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Hardware report
+Name[ru]=Отчёт о железе
+Comment=Collect touch, Wi-Fi and sound details into ~/pero-hwinfo.txt
+Comment[ru]=Собрать сведения о сенсоре, Wi-Fi и звуке в ~/pero-hwinfo.txt
+Exec=pero-hwinfo
+Icon=hwinfo
+Terminal=false
+Categories=System;Settings;

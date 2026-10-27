@@ -1,0 +1,63 @@
+#!/bin/sh
+# Pero OS: add a 32-bit UEFI loader (bootia32.efi).
+#
+# Cherry Trail / Bay Trail tablets have a 64-bit CPU but 32-bit UEFI firmware.
+# live-build 20250505 never produces bootia32.efi for amd64 (its check uses
+# variables that are empty at that point), so we build it here with grub-mkimage
+# from the build host's grub-efi-ia32-bin and put it next to bootx64.efi, both
+# in the ISO tree and in the El Torito EFI image. The amd64 kernel boots from
+# it thanks to CONFIG_EFI_MIXED.
+#
+# Runs on the build host with binary/ as the working directory.
+set -e
+
+GRUB=/usr/lib/grub/i386-efi
+[ -e "$GRUB/kernel.img" ] || { echo "grub-efi-ia32-bin is missing on the build host" >&2; exit 1; }
+
+TMP=$(mktemp -d)
+trap 'rm -rf "$TMP"' EXIT
+
+# Modules for `insmod` in grub.cfg / config.cfg
+mkdir -p boot/grub/i386-efi
+cp "$GRUB"/*.mod "$GRUB"/*.lst boot/grub/i386-efi/
+
+cat >"$TMP/early.cfg" <<'EOF'
+search --set=root --file /.disk/info
+set prefix=($root)/boot/grub
+configfile ($root)/boot/grub/grub.cfg
+EOF
+
+grub-mkimage -O i386-efi -d "$GRUB" -c "$TMP/early.cfg" -p /boot/grub -o "$TMP/bootia32.efi" \
+	part_gpt part_msdos fat iso9660 udf search search_fs_file search_label search_fs_uuid \
+	normal configfile linux boot echo test true loadenv regexp ls cat sleep \
+	all_video efi_gop efi_uga video_bochs video_cirrus gfxterm gfxterm_background gfxmenu \
+	font png jpeg gettext loopback chain halt reboot
+
+mkdir -p EFI/boot
+cp "$TMP/bootia32.efi" EFI/boot/bootia32.efi
+
+# Rebuild the FAT EFI image with room for the extra loader
+mkdir "$TMP/esp"
+mcopy -s -i boot/grub/efi.img ::/EFI ::/boot "$TMP/esp/"
+cp "$TMP/bootia32.efi" "$TMP/esp/EFI/boot/bootia32.efi"
+SIZE_KB=$(( $(du -sk "$TMP/esp" | cut -f1) + 1024 ))
+rm -f boot/grub/efi.img
+mkfs.msdos -C -n PERO_EFI boot/grub/efi.img "$SIZE_KB" >/dev/null
+mcopy -s -i boot/grub/efi.img "$TMP/esp/EFI" "$TMP/esp/boot" ::/
+
+# Boot menu: Pero names (GRUB's bundled font has no Cyrillic), auto-boot after
+# 5 s so a tablet without a keyboard never gets stuck, no beep, own splash.
+sed -i \
+	-e 's/"Live system (amd64 fail-safe mode)"/"Pero OS (safe mode)"/' \
+	-e 's/"Live system (amd64)"/"Pero OS"/' \
+	boot/grub/grub.cfg
+sed -i -e '/^insmod play/d' -e '/^play /d' boot/grub/config.cfg
+grep -q '^set timeout=' boot/grub/config.cfg || sed -i '1a set timeout=5\nset timeout_style=menu' boot/grub/config.cfg
+
+if [ -e ../chroot/usr/share/pero/grub-splash.png ]; then
+	cp ../chroot/usr/share/pero/grub-splash.png boot/grub/splash.png
+	# keep live-build's menu layout, just quieter colours
+	sed -i -e 's/item_color = "#a8a8a8"/item_color = "#8a8a8a"/' -e 's/@KEYMAP_SHORT@//' boot/grub/live-theme/theme.txt
+fi
+
+echo "bootia32.efi added; EFI image ${SIZE_KB} KB"

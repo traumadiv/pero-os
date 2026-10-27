@@ -1,0 +1,26 @@
+#!/bin/sh
+# Pero OS — live-build configuration
+set -e
+
+lb config noauto \
+	--mode debian \
+	--distribution trixie \
+	--architectures amd64 \
+	--archive-areas "main contrib non-free non-free-firmware" \
+	--linux-flavours amd64 \
+	--security true \
+	--updates true \
+	--apt-recommends false \
+	--firmware-chroot false \
+	--firmware-binary false \
+	--debian-installer none \
+	--bootloaders "grub-pc grub-efi" \
+	--binary-images iso-hybrid \
+	--chroot-squashfs-compression-type zstd \
+	--memtest none \
+	--iso-application "Pero OS" \
+	--iso-publisher "Pero OS" \
+	--iso-volume "PERO_OS" \
+	--image-name "pero-os" \
+	--bootappend-live "boot=live components quiet splash locales=ru_RU.UTF-8,en_US.UTF-8 keyboard-layouts=us,ru keyboard-options=grp:alt_shift_toggle,grp_led:scroll timezone=Europe/Moscow username=pero hostname=pero user-fullname=Pero" \
+	"${@}"

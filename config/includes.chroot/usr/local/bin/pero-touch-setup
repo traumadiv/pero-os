@@ -1,0 +1,95 @@
+#!/bin/bash
+# pero-touch-setup — make a Silead (MSSL1680) touchscreen work.
+#
+# Silead controllers need a per-tablet firmware blob that Linux distributions
+# cannot ship. Windows tablets carry it inside the Windows touch driver, so this
+# tool finds SileadTouch.sys on the internal Windows partition (or takes a path),
+# extracts the firmware and installs it as /lib/firmware/silead/mssl1680.fw.
+#
+#   pero-touch-setup                   search Windows partitions automatically
+#   pero-touch-setup /path/SileadTouch.sys
+#   pero-touch-setup --next            try the next firmware candidate
+
+set -e
+[ "$(id -u)" -ne 0 ] && exec pkexec "$0" "$@"
+
+TOOLS=/usr/share/pero/gsl-tools
+WORK=/var/lib/pero/touch
+FW=/lib/firmware/silead/mssl1680.fw
+mkdir -p "$WORK" /lib/firmware/silead
+
+has_silead() { grep -qs '^MSSL' /sys/bus/acpi/devices/*/hid; }
+
+reload() {
+	modprobe -r silead 2>/dev/null || true
+	modprobe silead
+	sleep 2
+	if grep -q silead /proc/bus/input/devices; then
+		echo "Драйвер silead загружен. Проверьте касание."
+	else
+		echo "Драйвер не поднял устройство, смотрите: dmesg | grep -i silead"
+	fi
+}
+
+find_driver() {
+	local dev mnt f
+	for dev in $(lsblk -rno PATH,FSTYPE | awk '$2=="ntfs" {print $1}'); do
+		mnt=$(mktemp -d)
+		if mount -o ro "$dev" "$mnt" 2>/dev/null; then
+			f=$(find "$mnt/Windows/System32/drivers" "$mnt/Windows/System32/DriverStore/FileRepository" \
+				-maxdepth 2 -iname 'SileadTouch*.sys' 2>/dev/null | head -n1)
+			if [ -n "$f" ]; then
+				cp "$f" "$WORK/SileadTouch.sys"
+				umount "$mnt"; rmdir "$mnt"
+				return 0
+			fi
+			umount "$mnt"
+		fi
+		rmdir "$mnt"
+	done
+	return 1
+}
+
+install_candidate() {
+	local n=$1 file
+	file=$(ls -S "$WORK"/firmware_*.fw 2>/dev/null | sed -n "${n}p")
+	[ -z "$file" ] && { echo "Кандидатов больше нет."; exit 1; }
+	echo "$n" >"$WORK/current"
+	install -m 0644 "$file" "$FW"
+	echo "Установлена прошивка $(basename "$file") → $FW"
+	reload
+}
+
+if ! has_silead; then
+	echo "Контроллер Silead (MSSL*) не найден — этой утилите здесь делать нечего."
+	echo "Если сенсор не работает, запустите pero-hwinfo и пришлите отчёт."
+	exit 0
+fi
+
+if [ "$1" = "--next" ]; then
+	install_candidate $(( $(cat "$WORK/current" 2>/dev/null || echo 0) + 1 ))
+	exit 0
+fi
+
+if [ -n "$1" ]; then
+	cp "$1" "$WORK/SileadTouch.sys"
+elif ! find_driver; then
+	echo "SileadTouch.sys не найден на разделах Windows."
+	echo "Скопируйте его с флешки и запустите: pero-touch-setup /путь/SileadTouch.sys"
+	exit 1
+fi
+
+cd "$WORK"
+rm -f firmware_*.fw
+perl "$TOOLS/scanwindrv" SileadTouch.sys
+install_candidate 1
+
+cat <<'EOF'
+
+Если касания идут мимо (оси перевёрнуты или масштаб неверный), добавьте в
+/etc/default/grub в GRUB_CMDLINE_LINUX_DEFAULT параметр вида
+  i2c_touchscreen_props=MSSL1680:touchscreen-size-x=1920:touchscreen-size-y=1200
+(при необходимости :touchscreen-swapped-x-y:touchscreen-inverted-x)
+и выполните: sudo update-grub && reboot
+Другая прошивка-кандидат: pero-touch-setup --next
+EOF

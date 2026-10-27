@@ -1,0 +1,12 @@
+/* Pero OS: finger-friendly tweaks on top of Orchis */
+
+scrollbar slider {
+  min-width: 10px;
+  min-height: 10px;
+}
+
+/* XFCE panel: a bit more air around touch targets */
+.xfce4-panel button {
+  padding-left: 8px;
+  padding-right: 8px;
+}

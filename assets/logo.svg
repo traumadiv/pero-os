@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- Pero: a fountain-pen nib -->
+  <path fill="#f2f2f2" fill-rule="evenodd" d="
+    M64 10 C70 22 84 40 95 56 C101 65 100 74 94 82 L70 112 C67 116 61 116 58 112 L34 82
+    C28 74 27 65 33 56 C44 40 58 22 64 10 Z
+    M64 55 a8 8 0 1 0 0.01 0 Z
+    M62.6 70 L65.4 70 L65.4 110 L62.6 110 Z"/>
+</svg>

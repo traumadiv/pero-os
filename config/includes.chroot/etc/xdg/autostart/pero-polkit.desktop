@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Authentication agent
+Name[ru]=Агент аутентификации
+Exec=/usr/libexec/polkit-mate-authentication-agent-1
+NoDisplay=true
+OnlyShowIn=XFCE;
+X-XFCE-Autostart-Override=true

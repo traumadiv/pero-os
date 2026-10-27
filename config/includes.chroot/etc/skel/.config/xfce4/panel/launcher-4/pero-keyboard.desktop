@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Keyboard
+Name[ru]=Клавиатура
+Comment=Show or hide the on-screen keyboard
+Comment[ru]=Показать или скрыть экранную клавиатуру
+Exec=pero-keyboard
+Icon=input-keyboard-symbolic
+Terminal=false

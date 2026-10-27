@@ -1,0 +1,87 @@
+#!/bin/sh
+# Pero OS: final touches inside the image.
+set -e
+
+chmod 0755 /usr/local/bin/pero-*
+
+# Includes are copied before packages get installed, so files owned by
+# calamares-settings-debian are put in place here, after it.
+install -m 0755 /usr/share/pero/calamares/calamares-bootloader-config /usr/share/calamares/helpers/
+install -m 0644 /usr/share/pero/calamares/packages.conf /etc/calamares/modules/
+install -m 0644 /usr/share/pero/zramswap /etc/default/zramswap
+chmod 0755 /usr/local/sbin/pero-grub-install
+sed -i 's/^grubInstall:.*/grubInstall: "pero-grub-install"/' /etc/calamares/modules/bootloader.conf
+# A short or dictionary password gets a warning, never a dead end
+grep -q '^allowWeakPasswords' /etc/calamares/modules/users.conf ||
+	printf 'allowWeakPasswords: true\nallowWeakPasswordsDefault: true\n' >>/etc/calamares/modules/users.conf
+
+# Branding
+sed -i 's/^PRETTY_NAME=.*/PRETTY_NAME="Pero OS 1.0 (Debian 13 trixie)"/' /usr/lib/os-release
+printf 'Pero OS 1.0 \\n \\l\n\n' >/etc/issue
+echo "Pero OS 1.0" >/etc/issue.net
+
+# Calamares: our branding, keep Debian's module sequence
+sed -i 's/^branding: .*/branding: pero/' /etc/calamares/settings.conf
+sed -i -e 's/Install Debian/Install Pero OS/' -e '/^Name\[ru\]=/d' -e 's/^Icon=.*/Icon=pero-logo/' -e 's/^Exec=.*/Exec=pero-install/' \
+	-e '/^Name=/a Name[ru]=Установить Pero OS' /usr/share/applications/calamares-install-debian.desktop
+# Debian's desktop-icon helper is replaced by pero-installer-icon
+rm -f /etc/xdg/autostart/calamares-desktop-icon.desktop
+
+# Default wallpaper for any monitor name xfdesktop sees first
+for f in /usr/share/backgrounds/xfce/xfce-shapes.svg /usr/share/backgrounds/xfce/xfce-x.svg; do
+	[ -e "$f" ] && cp /usr/share/backgrounds/pero/pero-dark.png "$f"
+done
+
+# GTK4 / libadwaita apps follow the same look
+mkdir -p /etc/skel/.config/gtk-4.0
+cp /etc/skel/.config/gtk-3.0/gtk.css /etc/skel/.config/gtk-4.0/gtk.css
+
+# Hide menu clutter on a tablet
+for app in xfce4-appfinder xfce4-mail-reader xfce4-run debian-xterm debian-uxterm \
+	xterm uxterm lxpolkit vim nm-connection-editor; do
+	f=/usr/share/applications/$app.desktop
+	[ -e "$f" ] && echo "NoDisplay=true" >>"$f"
+done
+
+# Firefox ESR: Russian UI, smooth touch scrolling, lighter on 4 GB RAM
+mkdir -p /usr/lib/firefox-esr/defaults/pref
+cat >/usr/lib/firefox-esr/defaults/pref/pero.js <<'EOF'
+pref("intl.locale.requested", "ru,en-US");
+pref("apz.allow_zooming", true);
+pref("apz.gtk.kinetic_scroll.enabled", true);
+pref("browser.gesture.pinch.in", "");
+pref("browser.gesture.pinch.out", "");
+pref("dom.ipc.processCount", 2);
+pref("browser.tabs.unloadOnLowMemory", true);
+pref("layout.css.devPixelsPerPx", "-1.0");
+pref("browser.toolbars.bookmarks.visibility", "never");
+EOF
+
+# LibreOffice: Colibre icons + no start centre tips, Russian UI
+mkdir -p /etc/libreoffice/registry
+cat >/etc/libreoffice/registry/pero.xcd <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<oor:data xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:oor="http://openoffice.org/2001/registry">
+<dependency file="main"/>
+<oor:component-data oor:package="org.openoffice.Office" oor:name="Common">
+ <node oor:name="Misc">
+  <prop oor:name="ShowTipOfTheDay" oor:op="fuse"><value>false</value></prop>
+  <prop oor:name="FirstRun" oor:op="fuse"><value>false</value></prop>
+  <prop oor:name="SymbolStyle" oor:op="fuse"><value>colibre_dark</value></prop>
+ </node>
+</oor:component-data>
+<oor:component-data oor:package="org.openoffice.Setup" oor:name="L10N">
+ <prop oor:name="ooLocale" oor:op="fuse"><value>ru</value></prop>
+</oor:component-data>
+</oor:data>
+EOF
+
+glib-compile-schemas /usr/share/glib-2.0/schemas
+gtk-update-icon-cache -f /usr/share/icons/hicolor 2>/dev/null || true
+fc-cache -f >/dev/null 2>&1 || true
+
+# Smaller image: Papirus-Dark only needs the base Papirus set
+rm -rf /usr/share/icons/Papirus-Light /usr/share/icons/ePapirus /usr/share/icons/ePapirus-Dark
+apt-get -y autoremove --purge
+apt-get clean
+rm -rf /usr/share/doc/*/changelog* /usr/share/man/??_* /var/lib/apt/lists/*
