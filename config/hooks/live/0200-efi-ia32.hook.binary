@@ -54,6 +54,13 @@ sed -i \
 sed -i -e '/^insmod play/d' -e '/^play /d' boot/grub/config.cfg
 grep -q '^set timeout=' boot/grub/config.cfg || sed -i '1a set timeout=5\nset timeout_style=menu' boot/grub/config.cfg
 
+# 64-bit kernel from 32-bit GRUB (mixed mode): with KASLR the kernel can land on
+# memory the EFI page tables map NX, and the first EFI call panics at ~0.5 s
+# ("Attempted to kill the idle task"). Boot with nokaslr only on ia32.
+grep -q pero_ia32 boot/grub/config.cfg ||
+	sed -i '1a if [ "$grub_cpu" = "i386" ]; then set pero_ia32=nokaslr; fi' boot/grub/config.cfg
+sed -i '/^\s*linux\s/{/pero_ia32/!s/$/ ${pero_ia32}/}' boot/grub/grub.cfg
+
 if [ -e ../chroot/usr/share/pero/grub-splash.png ]; then
 	cp ../chroot/usr/share/pero/grub-splash.png boot/grub/splash.png
 	# keep live-build's menu layout, just quieter colours

@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Games
+Name[ru]=Игры
+Comment=Play NES, SNES, Game Boy, PS1, PSP, DS, N64 and Dreamcast games
+Comment[ru]=Игры для NES, SNES, Game Boy, PS1, PSP, DS, N64 и Dreamcast
+Exec=pero-games
+Icon=retroarch
+Terminal=false
+Categories=Game;Emulator;
+Keywords=emulator;retroarch;psp;ps1;nes;snes;эмулятор;игры;

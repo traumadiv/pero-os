@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Play torrent
+Name[ru]=Смотреть торрент
+Exec=pero-torrent-play %u
+Icon=multimedia-video-player
+Terminal=false
+NoDisplay=true
+MimeType=x-scheme-handler/magnet;application/x-bittorrent;

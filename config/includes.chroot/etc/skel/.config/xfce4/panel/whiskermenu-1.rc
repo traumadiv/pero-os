@@ -33,4 +33,4 @@ command-logout=xfce4-session-logout
 show-command-logout=true
 command-menueditor=menulibre
 show-command-menueditor=false
-favorites=firefox-esr.desktop,libreoffice-writer.desktop,libreoffice-calc.desktop,libreoffice-impress.desktop,org.gnome.Evince.desktop,com.github.xournalpp.xournalpp.desktop,thunar.desktop,org.xfce.mousepad.desktop,org.gnome.Calculator.desktop,xfce4-terminal.desktop
+favorites=firefox-esr.desktop,libreoffice-writer.desktop,libreoffice-calc.desktop,libreoffice-impress.desktop,org.gnome.Evince.desktop,com.github.xournalpp.xournalpp.desktop,thunar.desktop,org.xfce.mousepad.desktop,org.gnome.Calculator.desktop,pero-games.desktop,pero-kino.desktop,xfce4-terminal.desktop

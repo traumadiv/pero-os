@@ -1,0 +1,21 @@
+#!/bin/sh
+# pero-kino — start TorrServer and open its page in Firefox.
+
+TS=http://127.0.0.1:8090
+
+ts_up() {
+	mkdir -p "$HOME/.local/share/torrserver"
+	systemctl --user start torrserver.service
+	for _ in $(seq 1 50); do
+		curl -fs -o /dev/null "$TS/echo" && return 0
+		sleep 0.2
+	done
+	notify-send -i dialog-error "Кино" "TorrServer не запустился"
+	return 1
+}
+
+# Sourced by pero-torrent-play for ts_up
+[ "${PERO_KINO_LIB:-}" = 1 ] && return 0
+
+ts_up || exit 1
+exec firefox-esr --new-window "$TS/"

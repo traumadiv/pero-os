@@ -21,6 +21,10 @@ if [ -d /sys/firmware/efi/efivars ]; then
     if [ "$(cat /sys/firmware/efi/fw_platform_size 2>/dev/null)" = "32" ]; then
         echo " * Installing grub-efi-ia32 (32-bit UEFI)..."
         chroot $CHROOT apt-get -y install $(deb grub2-common) $(deb grub-efi-ia32)
+        # Mixed mode panics early when KASLR puts the kernel on memory the EFI
+        # page tables map NX (see 0200-efi-ia32.hook.binary)
+        grep -q nokaslr $CHROOT/etc/default/grub ||
+            sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT="\(.*\)"/GRUB_CMDLINE_LINUX_DEFAULT="\1 nokaslr"/' $CHROOT/etc/default/grub
     else
         echo " * Installing grub-efi-amd64 (64-bit UEFI)..."
         chroot $CHROOT apt-get -y install $(deb grub2-common) $(deb grub-efi-amd64) $(deb grub-efi-amd64-signed)

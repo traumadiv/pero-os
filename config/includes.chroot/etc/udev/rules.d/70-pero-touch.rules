@@ -1,0 +1,4 @@
+# pero-touchd runs in the user's session: it reads the touchscreen and replays
+# it through uinput, so the seat's user gets both (before 73-seat-late applies uaccess).
+KERNEL=="uinput", SUBSYSTEM=="misc", TAG+="uaccess", OPTIONS+="static_node=uinput"
+SUBSYSTEM=="input", KERNEL=="event*", ENV{ID_INPUT_TOUCHSCREEN}=="1", TAG+="uaccess"

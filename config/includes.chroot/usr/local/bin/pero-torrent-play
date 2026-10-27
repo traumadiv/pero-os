@@ -1,0 +1,29 @@
+#!/bin/sh
+# pero-torrent-play — play a magnet link or a .torrent file in mpv while it downloads.
+# Opened for magnet: links (Firefox) and .torrent files (Thunar).
+
+TS=http://127.0.0.1:8090
+PERO_KINO_LIB=1 . /usr/local/bin/pero-kino
+
+src=${1:?usage: pero-torrent-play <magnet:...|file.torrent>}
+case "$src" in file://*) src=$(printf '%b' "$(echo "${src#file://}" | sed 's/%/\\x/g')") ;; esac
+
+ts_up || exit 1
+notify-send -i video-x-generic "Кино" "Получаю список файлов торрента…"
+
+if [ -f "$src" ]; then
+	resp=$(curl -fs -F "file=@$src" -F save=true "$TS/torrent/upload")
+else
+	link=$(printf '%s' "$src" | sed 's/\\/\\\\/g; s/"/\\"/g')
+	resp=$(curl -fs -H 'Content-Type: application/json' \
+		-d "{\"action\":\"add\",\"link\":\"$link\",\"save_to_db\":true}" "$TS/torrents")
+fi
+
+hash=$(printf '%s' "$resp" | grep -o '"hash":"[0-9a-fA-F]*"' | head -1 | cut -d'"' -f4)
+if [ -z "$hash" ]; then
+	notify-send -i dialog-error "Кино" "TorrServer не принял торрент"
+	exit 1
+fi
+
+# The m3u lists every video file of the torrent; mpv waits for the first pieces
+exec mpv --force-window=immediate --title="Кино" "$TS/stream/play.m3u?link=$hash&m3u"

@@ -1,0 +1,10 @@
+[Unit]
+Description=TorrServer (torrent streaming, localhost only)
+Documentation=https://github.com/YouROK/TorrServer
+
+[Service]
+# Started on demand by pero-kino / pero-torrent-play, stops with the session.
+# Bound to 127.0.0.1: the web UI and streams are never reachable from the network.
+ExecStart=/usr/local/bin/torrserver --ip 127.0.0.1 --port 8090 --path %h/.local/share/torrserver
+Restart=on-failure
+Nice=5

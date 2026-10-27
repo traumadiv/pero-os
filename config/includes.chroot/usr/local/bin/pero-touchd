@@ -1,0 +1,4 @@
+#!/bin/sh
+# pero-touchd — touch gestures: long press / two-finger tap = right click,
+# swipe in from the right edge = quick settings. See /usr/lib/pero/pero-touchd.py
+exec /usr/bin/python3 /usr/lib/pero/pero-touchd.py "$@"

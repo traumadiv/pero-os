@@ -2,14 +2,14 @@
 # Pero OS: final touches inside the image.
 set -e
 
-chmod 0755 /usr/local/bin/pero-*
+chmod 0755 /usr/local/bin/pero-* /usr/lib/pero/*.py
 
 # Includes are copied before packages get installed, so files owned by
 # calamares-settings-debian are put in place here, after it.
 install -m 0755 /usr/share/pero/calamares/calamares-bootloader-config /usr/share/calamares/helpers/
 install -m 0644 /usr/share/pero/calamares/packages.conf /etc/calamares/modules/
 install -m 0644 /usr/share/pero/zramswap /etc/default/zramswap
-chmod 0755 /usr/local/sbin/pero-grub-install
+chmod 0755 /usr/local/sbin/pero-grub-install /usr/lib/systemd/system-sleep/pero-radios
 sed -i 's/^grubInstall:.*/grubInstall: "pero-grub-install"/' /etc/calamares/modules/bootloader.conf
 # A short or dictionary password gets a warning, never a dead end
 grep -q '^allowWeakPasswords' /etc/calamares/modules/users.conf ||
@@ -55,6 +55,43 @@ pref("dom.ipc.processCount", 2);
 pref("browser.tabs.unloadOnLowMemory", true);
 pref("layout.css.devPixelsPerPx", "-1.0");
 pref("browser.toolbars.bookmarks.visibility", "never");
+pref("datareporting.policy.firstRunURL", "");
+pref("datareporting.policy.dataSubmissionPolicyBypassNotification", true);
+pref("browser.aboutwelcome.enabled", false);
+EOF
+
+# Firefox ESR: magnet links and TorrServer playlists go straight to the system handlers
+mkdir -p /usr/lib/firefox-esr/distribution
+cat >/usr/lib/firefox-esr/distribution/policies.json <<'EOF'
+{
+  "policies": {
+    "Handlers": {
+      "schemes": {
+        "magnet": { "action": "useSystemDefault", "ask": false }
+      },
+      "mimeTypes": {
+        "audio/x-mpegurl": { "action": "useSystemDefault", "ask": false },
+        "application/x-bittorrent": { "action": "useSystemDefault", "ask": false }
+      }
+    }
+  }
+}
+EOF
+
+# mpv: hardware decoding on Cherry Trail, finger-sized controls, remember position
+cat >>/etc/mpv/mpv.conf <<'EOF'
+
+# Pero OS
+hwdec=auto-safe
+vo=gpu,xv,x11
+fullscreen=yes
+keep-open=yes
+save-position-on-quit=yes
+cache=yes
+demuxer-max-bytes=150MiB
+slang=ru,rus,en,eng
+alang=ru,rus,en,eng
+script-opts=osc-scalewindowed=2,osc-scalefullscreen=2,osc-deadzonesize=0.3
 EOF
 
 # LibreOffice: Colibre icons + no start centre tips, Russian UI
@@ -75,6 +112,38 @@ cat >/etc/libreoffice/registry/pero.xcd <<'EOF'
 </oor:component-data>
 </oor:data>
 EOF
+
+# Games: RetroArch set up for a touch tablet (users get /etc/retroarch.cfg on first start)
+RA=/etc/retroarch.cfg
+ra_set() {
+	sed -i "/^$1 = /d" "$RA"
+	echo "$1 = \"$2\"" >>"$RA"
+}
+ra_set menu_driver glui
+ra_set user_language 9
+ra_set video_driver gl
+ra_set video_fullscreen true
+ra_set video_threaded true
+ra_set menu_pointer_enable true
+ra_set menu_mouse_enable true
+ra_set input_overlay_enable true
+ra_set input_overlay /usr/share/libretro/overlays/gamepads/neo-retropad/neo-retropad.cfg
+ra_set input_overlay_opacity 0.6
+ra_set input_overlay_hide_when_gamepad_connected true
+ra_set overlay_directory /usr/share/libretro/overlays/
+ra_set joypad_autoconfig_dir /usr/share/libretro/autoconfig/
+ra_set rgui_browser_directory "~/Игры"
+ra_set system_directory "~/.config/retroarch/system"
+ra_set savefile_directory "~/.config/retroarch/saves"
+ra_set savestate_directory "~/.config/retroarch/states"
+ra_set menu_show_core_updater false
+# The wallpapers alone are ~100 MB; MaterialUI only needs assets/glui
+rm -rf /usr/share/libretro/assets/wallpapers
+chmod 0644 /usr/lib/x86_64-linux-gnu/libretro/*.so
+# "Игры" (pero-games) replaces the plain RetroArch entry
+for f in /usr/share/applications/retroarch.desktop /usr/share/applications/com.libretro.RetroArch.desktop; do
+	[ -e "$f" ] && echo "NoDisplay=true" >>"$f"
+done
 
 glib-compile-schemas /usr/share/glib-2.0/schemas
 gtk-update-icon-cache -f /usr/share/icons/hicolor 2>/dev/null || true

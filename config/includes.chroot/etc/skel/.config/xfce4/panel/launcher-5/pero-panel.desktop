@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Quick settings
+Name[ru]=Быстрые настройки
+Comment=Wi-Fi, Bluetooth, rotation, brightness, volume, sleep
+Comment[ru]=Wi-Fi, Bluetooth, поворот, яркость, громкость, сон
+Exec=pero-panel
+Icon=view-more-horizontal-symbolic
+Terminal=false

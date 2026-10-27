@@ -1,0 +1,14 @@
+#!/bin/sh
+# pero-games — RetroArch with the "performance" power profile held while it runs.
+# Cherry Trail drops its clocks fast on the balanced profile, which costs PSP/N64 games.
+
+GAMES="$HOME/Игры"
+for d in NES SNES "Game Boy" GBA "Sega" PS1 PSP "Nintendo DS" N64 Dreamcast "Аркады"; do
+	mkdir -p "$GAMES/$d"
+done
+
+# Not every machine offers "performance" (VMs, some firmware): then just run
+if powerprofilesctl list 2>/dev/null | grep -q 'performance:'; then
+	exec powerprofilesctl launch -p performance -r "Игры" -- retroarch "$@"
+fi
+exec retroarch "$@"

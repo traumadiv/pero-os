@@ -21,7 +21,7 @@ echo ">>> Зависимости сборки"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
 apt-get install -y -qq live-build debootstrap xorriso squashfs-tools mtools dosfstools \
-	grub-efi-amd64-bin grub-efi-ia32-bin grub-pc-bin librsvg2-bin fonts-inter git rsync >/dev/null
+	grub-efi-amd64-bin grub-efi-ia32-bin grub-pc-bin librsvg2-bin fonts-inter git rsync curl unzip >/dev/null
 
 echo ">>> Подготовка дерева в $WORK"
 mkdir -p "$WORK"
@@ -59,6 +59,34 @@ else git clone -q --depth 1 https://github.com/onitake/gsl-firmware "$GSL"; fi
 mkdir -p "$INC/usr/lib/firmware/silead" "$INC/usr/share/pero/gsl-tools"
 cp "$GSL"/firmware/linux/silead/*.fw "$INC/usr/lib/firmware/silead/"
 cp "$GSL"/tools/scanwindrv "$GSL"/tools/fwtool "$GSL"/tools/LICENSE "$INC/usr/share/pero/gsl-tools/"
+
+echo ">>> Игры: ядра libretro, которых нет в Debian (buildbot.libretro.com)"
+# PSP, PS1, DS, N64, Dreamcast, arcades. Downloads are cached in $WORK/libretro.
+BB=https://buildbot.libretro.com
+LR="$WORK/libretro"
+mkdir -p "$LR" "$INC/usr/lib/x86_64-linux-gnu/libretro" "$INC/usr/share/libretro/overlays" \
+	"$INC/usr/share/libretro/autoconfig" "$INC/etc/skel/.config/retroarch/system"
+for core in ppsspp pcsx_rearmed melonds mupen64plus_next flycast fbneo; do
+	z="$LR/${core}_libretro.so.zip"
+	[ -s "$z" ] || curl -fsSL -o "$z" "$BB/nightly/linux/x86_64/latest/${core}_libretro.so.zip"
+	unzip -qo "$z" -d "$INC/usr/lib/x86_64-linux-gnu/libretro/"
+done
+for f in system/PPSSPP frontend/overlays frontend/autoconfig; do
+	z="$LR/$(basename $f).zip"
+	[ -s "$z" ] || curl -fsSL -o "$z" "$BB/assets/$f.zip"
+done
+# PPSSPP needs its font/flash0 files in the RetroArch system folder
+unzip -qo "$LR/PPSSPP.zip" -d "$INC/etc/skel/.config/retroarch/system/"
+# One on-screen gamepad is enough for a tablet
+unzip -qo "$LR/overlays.zip" 'gamepads/neo-retropad/*' -d "$INC/usr/share/libretro/overlays/"
+unzip -qo "$LR/autoconfig.zip" 'udev/*' -d "$INC/usr/share/libretro/autoconfig/"
+
+echo ">>> TorrServer (github.com/YouROK/TorrServer, GPL-3.0)"
+TS_VER=MatriX.146.1
+TSB="$WORK/torrserver/ts-$TS_VER"
+mkdir -p "$WORK/torrserver"
+[ -s "$TSB" ] || curl -fsSL -o "$TSB" "https://github.com/YouROK/TorrServer/releases/download/$TS_VER/TorrServer-linux-amd64"
+install -m 0755 "$TSB" "$INC/usr/local/bin/torrserver"
 
 echo ">>> GRUB-пакеты для установщика (взаимоисключающие, поэтому не в пуле ISO)"
 DEBS="$INC/usr/share/pero/debs"

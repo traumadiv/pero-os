@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Pero touch gestures
+Exec=pero-touchd
+NoDisplay=true
+OnlyShowIn=XFCE;
+X-XFCE-Autostart-Override=true

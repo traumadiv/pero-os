@@ -26,6 +26,11 @@ thermald
 power-profiles-daemon
 xdg-user-dirs
 xdg-utils
+python3-gi
+gir1.2-gtk-3.0
+python3-evdev
+xdotool
+brightnessctl
 dbus-x11
 polkitd
 mate-polkit
@@ -101,10 +106,12 @@ light-locker
 network-manager
 network-manager-gnome
 blueman
+dbus-user-session
 pipewire
 pipewire-pulse
 pipewire-alsa
 wireplumber
+rtkit
 pavucontrol
 xarchiver
 7zip
@@ -169,3 +176,15 @@ grub-common
 shim-signed
 cryptsetup
 keyutils
+
+# ---- Games: RetroArch + cores from Debian (the rest come from the libretro buildbot in build.sh) ----
+retroarch
+libretro-core-info
+libretro-nestopia
+libretro-snes9x
+libretro-gambatte
+libretro-mgba
+libretro-genesisplusgx
+
+# ---- Cinema: TorrServer (downloaded in build.sh) + mpv ----
+mpv

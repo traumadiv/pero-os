@@ -1,5 +1,5 @@
 [user]
-pinned=/usr/share/applications/firefox-esr.desktop;/usr/share/applications/thunar.desktop;/usr/share/applications/libreoffice-writer.desktop;/usr/share/applications/libreoffice-calc.desktop;/usr/share/applications/org.gnome.Evince.desktop;/usr/share/applications/com.github.xournalpp.xournalpp.desktop;
+pinned=/usr/share/applications/firefox-esr.desktop;/usr/share/applications/thunar.desktop;/usr/share/applications/libreoffice-writer.desktop;/usr/share/applications/libreoffice-calc.desktop;/usr/share/applications/org.gnome.Evince.desktop;/usr/share/applications/com.github.xournalpp.xournalpp.desktop;/usr/share/applications/pero-games.desktop;
 indicatorStyle=2
 indicatorOrientation=0
 noWindowsListIfSingle=true

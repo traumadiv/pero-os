@@ -1,0 +1,7 @@
+#!/bin/sh
+# pero-panel — open or close the quick settings on the right edge.
+# The panel stays resident after login, so poking it over D-Bus is instant;
+# without it running, start it.
+gdbus call --session --dest org.pero.Panel --object-path /org/pero/Panel \
+	--method org.gtk.Application.Activate '{}' >/dev/null 2>&1 && exit 0
+exec /usr/bin/python3 /usr/lib/pero/pero-panel.py "$@"

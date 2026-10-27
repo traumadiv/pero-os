@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Pero quick settings
+Exec=/usr/bin/python3 /usr/lib/pero/pero-panel.py --hidden
+NoDisplay=true
+OnlyShowIn=XFCE;
+X-XFCE-Autostart-Override=true

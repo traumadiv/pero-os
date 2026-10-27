@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Torrent Cinema
+Name[ru]=Кино
+Comment=Watch videos from torrents while they download (TorrServer)
+Comment[ru]=Смотреть видео из торрентов, не дожидаясь загрузки (TorrServer)
+Exec=pero-kino
+Icon=multimedia-video-player
+Terminal=false
+Categories=AudioVideo;Video;Player;
+Keywords=torrserver;torrent;magnet;кино;фильм;торрент;

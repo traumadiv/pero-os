@@ -1,0 +1,30 @@
+#!/bin/sh
+# pero-radios — radios fully off while the tablet sleeps.
+# Cherry Trail sleeps in s2idle (S0ix): the cores only reach their deepest
+# C-states when every device is idle. The RTL8723BS SDIO Wi-Fi keeps scanning
+# and blocks that, so it is unloaded; Wi-Fi and Bluetooth are rfkilled.
+# Whatever was on before sleep is switched back on after wake.
+
+STATE=/run/pero-radios
+
+was_on() { grep -qx "$1 unblocked" "$STATE"; }
+
+case "$1" in
+pre)
+	rfkill --noheadings -o TYPE,SOFT list 2>/dev/null | awk '{print $1, $2}' | sort -u >"$STATE"
+	rfkill block wlan
+	rfkill block bluetooth
+	if grep -q '^r8723bs ' /proc/modules; then
+		modprobe -r r8723bs && echo r8723bs >>"$STATE"
+	fi
+	;;
+post)
+	[ -e "$STATE" ] || exit 0
+	grep -qx r8723bs "$STATE" && modprobe r8723bs
+	for t in wlan bluetooth; do
+		was_on "$t" && rfkill unblock "$t"
+	done
+	rm -f "$STATE"
+	;;
+esac
+exit 0
