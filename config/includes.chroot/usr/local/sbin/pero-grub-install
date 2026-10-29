@@ -1,10 +1,100 @@
 #!/bin/sh
 # pero-grub-install — grub-install for Calamares that survives tablet firmware.
+#
 # Cherry Trail 32-bit UEFI (and OVMF ia32 under a 64-bit kernel) often refuse
 # EFI variable writes. The files are fine then, only the NVRAM entry is missing,
 # so retry without it: Calamares' installEFIFallback puts the loader at
 # EFI/BOOT/BOOT*.EFI, which the firmware boots on its own.
+#
+# On i386-efi Debian installs a plain core image whose prefix is only a
+# partition number, "(,gpt2)/boot/grub", relative to the disk GRUB was started
+# from. Cherry Trail firmware hands GRUB an eMMC device path it cannot map back
+# to a disk, so the menu never loads and the tablet stops at the grub> prompt
+# (`configfile /boot/grub/grub.cfg` gets it going by hand). So the loader is
+# replaced with a standalone image that finds /boot by filesystem UUID and has
+# every module the menu needs built in, and a grub.cfg stub goes next to it.
+#
+#   pero-grub-install <grub-install args>   what Calamares runs
+#   pero-grub-install --refresh             rebuild the loader on an installed system
+#                                           (apt runs it after GRUB upgrades)
 
-grub-install "$@" && exit 0
-echo "pero-grub-install: NVRAM write failed, retrying with --no-nvram" >&2
-exec grub-install "$@" --no-nvram
+GRUB=/usr/lib/grub/i386-efi
+STAMP=/var/lib/pero/grub-ia32.stamp
+
+# Modules for grub.cfg's own insmod lines; built in, so GRUB never loads
+# modules from /boot that could be from another GRUB version.
+MODULES="part_gpt part_msdos fat ext2 btrfs xfs iso9660 search search_fs_uuid
+	search_fs_file search_label normal configfile linux boot echo test true
+	loadenv regexp ls cat sleep gzio xzio lzopio zstd all_video efi_gop efi_uga
+	video_bochs video_cirrus gfxterm gfxterm_background gfxmenu font png jpeg
+	gettext chain halt reboot minicmd keystatus probe cpuid"
+
+esp_dir() {
+	for d in "$1" /boot/efi /efi; do
+		[ -n "$d" ] && mountpoint -q "$d" && { echo "$d"; return; }
+	done
+}
+
+# Build EFI/<id>/grubia32.efi and EFI/BOOT/BOOTIA32.EFI on the ESP
+standalone_ia32() {
+	esp=$(esp_dir "$1") id=${2:-debian}
+	[ -n "$esp" ] && [ -e "$GRUB/kernel.img" ] || return 1
+	# LUKS / LVM / RAID /boot needs grub-install's own cryptomount logic
+	[ -z "$(grub-probe --target=abstraction /boot/grub 2>/dev/null)" ] || return 1
+	uuid=$(grub-probe --target=fs_uuid /boot/grub) || return 1
+	rel=$(grub-mkrelpath /boot/grub) || return 1
+
+	tmp=$(mktemp -d)
+	cat >"$tmp/early.cfg" <<EOF
+search --no-floppy --fs-uuid --set=root $uuid
+set prefix=(\$root)$rel
+configfile \$prefix/grub.cfg
+EOF
+	# shellcheck disable=SC2086
+	grub-mkimage -O i386-efi -d "$GRUB" -c "$tmp/early.cfg" -p "$rel" \
+		-o "$tmp/grubia32.efi" $MODULES || { rm -rf "$tmp"; return 1; }
+
+	# Same config as a stub for any other GRUB image that ends up in these directories
+	for d in "$esp/EFI/$id" "$esp/EFI/BOOT"; do
+		mkdir -p "$d"
+		cp "$tmp/early.cfg" "$d/grub.cfg"
+	done
+	cp "$tmp/grubia32.efi" "$esp/EFI/$id/grubia32.efi"
+	# FAT is case-insensitive; reuse whatever spelling is already there
+	boot=$(find "$esp/EFI/BOOT" -maxdepth 1 -iname bootia32.efi | head -n1)
+	cp "$tmp/grubia32.efi" "${boot:-$esp/EFI/BOOT/BOOTIA32.EFI}"
+	rm -rf "$tmp"
+
+	mkdir -p "${STAMP%/*}"
+	{ echo "$esp $id"; md5sum "$GRUB/kernel.img" | cut -d' ' -f1; } >"$STAMP"
+	echo "pero-grub-install: standalone i386-efi loader in $esp/EFI/$id and EFI/BOOT (/boot UUID $uuid)" >&2
+}
+
+if [ "$1" = "--refresh" ]; then
+	# Only on systems this script set up, and only when GRUB itself changed
+	[ -r "$STAMP" ] || exit 0
+	[ "$(sed -n 2p "$STAMP")" = "$(md5sum "$GRUB/kernel.img" 2>/dev/null | cut -d' ' -f1)" ] && exit 0
+	set -- $(sed -n 1p "$STAMP")
+	standalone_ia32 "$1" "$2"
+	exit 0
+fi
+
+target= efidir= id=
+for a in "$@"; do
+	case "$a" in
+		--target=*) target=${a#*=} ;;
+		--efi-directory=*) efidir=${a#*=} ;;
+		--bootloader-id=*) id=${a#*=} ;;
+	esac
+done
+
+grub-install "$@" || {
+	echo "pero-grub-install: NVRAM write failed, retrying with --no-nvram" >&2
+	grub-install "$@" --no-nvram || exit
+}
+
+if [ "$target" = i386-efi ]; then
+	standalone_ia32 "$efidir" "$id" ||
+		echo "pero-grub-install: kept grub-install's own loader" >&2
+fi
+exit 0

@@ -1,0 +1,3 @@
+// Pero OS: a GRUB upgrade rewrites the plain i386-efi loader; put the
+// standalone one back (does nothing on machines that never needed it).
+DPkg::Post-Invoke { "if [ -x /usr/local/sbin/pero-grub-install ]; then /usr/local/sbin/pero-grub-install --refresh || true; fi"; };

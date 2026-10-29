@@ -65,6 +65,28 @@ section() { printf '\n===== %s =====\n' "$1"; }
 
 	section "Battery"
 	upower -i "$(upower -e | grep -m1 BAT)" 2>/dev/null
+	for s in /sys/class/power_supply/*; do
+		echo "$(basename "$s"): type=$(cat "$s/type" 2>/dev/null) status=$(cat "$s/status" 2>/dev/null)" \
+			"capacity=$(cat "$s/capacity" 2>/dev/null) online=$(cat "$s/online" 2>/dev/null)" \
+			"power_now=$(cat "$s/power_now" 2>/dev/null) current_now=$(cat "$s/current_now" 2>/dev/null)"
+	done
+	powerprofilesctl get 2>&1
+
+	section "Sleep / idle"
+	echo "mem_sleep: $(cat /sys/power/mem_sleep 2>/dev/null)"
+	mount -t debugfs none /sys/kernel/debug 2>/dev/null
+	cat /sys/kernel/debug/pmc_atom/sleep_state 2>/dev/null
+	cat /sys/kernel/debug/pmc_atom/dev_state 2>/dev/null | grep -v 'D0i3\|Disabled' | head -n 40
+	journalctl -b -1 -k --no-pager 2>/dev/null | grep -iE 'PM: suspend|s2idle|wakeup' | tail -n 20
+	echo "--- busiest processes"
+	ps -eo pcpu,pmem,comm --sort=-pcpu | head -n 12
+
+	section "Boot loader"
+	efibootmgr -v 2>&1
+	for d in /boot/efi /efi; do
+		mountpoint -q "$d" && find "$d/EFI" -maxdepth 2 -printf '%p %s\n' 2>/dev/null
+	done
+	cat /boot/efi/EFI/BOOT/grub.cfg 2>/dev/null
 
 	section "Missing firmware / errors (dmesg)"
 	dmesg | grep -iE 'firmware|silead|goodix|touch|rtl|r8723|brcm|snd|sof|sst|i915.*(error|fail)|error|fail' | tail -n 150

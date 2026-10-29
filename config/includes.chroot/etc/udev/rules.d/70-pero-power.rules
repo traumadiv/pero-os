@@ -1,0 +1,12 @@
+# Pero OS: battery life on Cherry Trail.
+
+# Charger in / out: switch the power profile (pero-power-source)
+SUBSYSTEM=="power_supply", ACTION=="change", ENV{POWER_SUPPLY_ONLINE}=="?", \
+	RUN+="/usr/bin/systemd-run --no-block --quiet /usr/local/sbin/pero-power-source"
+
+# Runtime power management: idle PCI devices power down
+SUBSYSTEM=="pci", ACTION=="add", ATTR{power/control}="auto"
+# Idle USB devices suspend, except input devices: a sleeping dock keyboard or
+# touchpad drops the first keystroke or tap
+SUBSYSTEM=="usb", ACTION=="add", ENV{DEVTYPE}=="usb_device", ATTR{power/control}="auto"
+SUBSYSTEM=="usb", ACTION=="add", ENV{ID_USB_INTERFACES}=="*:03*", ATTR{power/control}="on"

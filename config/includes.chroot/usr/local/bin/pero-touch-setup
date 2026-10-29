@@ -5,10 +5,16 @@
 # cannot ship. Windows tablets carry it inside the Windows touch driver, so this
 # tool finds SileadTouch.sys on the internal Windows partition (or takes a path),
 # extracts the firmware and installs it as /lib/firmware/silead/mssl1680.fw.
+# Firmware from another tablet makes the controller report phantom touches all
+# over the screen, so every candidate is tried with a 30-second rollback: if the
+# touch is not confirmed with Enter, the previous state comes back on its own.
 #
 #   pero-touch-setup                   search Windows partitions automatically
 #   pero-touch-setup /path/SileadTouch.sys
 #   pero-touch-setup --next            try the next firmware candidate
+#   pero-touch-setup --size 1920x1200 [swap-xy] [invert-x] [invert-y]
+#                                      touch panel geometry (kernel parameter)
+#   pero-touch-setup --undo            remove the firmware and geometry, back to stock
 
 set -e
 [ "$(id -u)" -ne 0 ] && exec pkexec "$0" "$@"
@@ -16,19 +22,61 @@ set -e
 TOOLS=/usr/share/pero/gsl-tools
 WORK=/var/lib/pero/touch
 FW=/lib/firmware/silead/mssl1680.fw
+GRUBCFG=/etc/default/grub.d/90-pero-touch.cfg
 mkdir -p "$WORK" /lib/firmware/silead
 
 has_silead() { grep -qs '^MSSL' /sys/bus/acpi/devices/*/hid; }
+
+# Out-of-tree gslx680_ts_acpi grabs the same controller as the kernel's silead
+# driver; with both around the screen either goes dead or clicks by itself.
+drop_gslx680() {
+	local m found=
+	for m in gslx680_ts_acpi gslx680_acpi; do
+		modinfo "$m" >/dev/null 2>&1 || continue
+		found=1
+		modprobe -r "$m" 2>/dev/null || true
+		echo "blacklist $m" >>"$WORK/blacklist"
+	done
+	[ -n "$found" ] || return 0
+	sort -u "$WORK/blacklist" >/etc/modprobe.d/pero-no-gslx680.conf
+	if command -v dkms >/dev/null; then
+		dkms status 2>/dev/null | awk -F'[,/:]' 'tolower($1) ~ /gslx680/ {print $1"/"$2}' | tr -d ' ' |
+			while read -r mod; do dkms remove "$mod" --all 2>/dev/null || true; done
+	fi
+	echo "Отключён сторонний драйвер gslx680: он конфликтует со штатным silead."
+}
 
 reload() {
 	modprobe -r silead 2>/dev/null || true
 	modprobe silead
 	sleep 2
-	if grep -q silead /proc/bus/input/devices; then
-		echo "Драйвер silead загружен. Проверьте касание."
+	grep -q silead /proc/bus/input/devices
+}
+
+backup() { [ -e "$FW" ] && cp "$FW" "$WORK/previous.fw" || rm -f "$WORK/previous.fw"; }
+
+restore() {
+	if [ -e "$WORK/previous.fw" ]; then
+		install -m 0644 "$WORK/previous.fw" "$FW"
 	else
-		echo "Драйвер не поднял устройство, смотрите: dmesg | grep -i silead"
+		rm -f "$FW"
 	fi
+	reload || true
+}
+
+# Keep the change only if someone confirms it on the keyboard: with the wrong
+# firmware the touchscreen itself is useless for answering.
+confirm() {
+	echo
+	echo "Проверьте касание. Если всё в порядке, нажмите Enter в течение 30 секунд."
+	echo "Без ответа всё вернётся как было."
+	if read -r -t 30 _; then
+		echo "Оставлено."
+		return 0
+	fi
+	echo
+	echo "Нет подтверждения, откатываю."
+	return 1
 }
 
 find_driver() {
@@ -51,14 +99,61 @@ find_driver() {
 }
 
 install_candidate() {
-	local n=$1 file
+	local n=$1 file total
+	total=$(ls "$WORK"/firmware_*.fw 2>/dev/null | wc -l)
 	file=$(ls -S "$WORK"/firmware_*.fw 2>/dev/null | sed -n "${n}p")
-	[ -z "$file" ] && { echo "Кандидатов больше нет."; exit 1; }
+	[ -z "$file" ] && { echo "Кандидатов больше нет. Откат: pero-touch-setup --undo"; exit 1; }
 	echo "$n" >"$WORK/current"
+	backup
 	install -m 0644 "$file" "$FW"
-	echo "Установлена прошивка $(basename "$file") → $FW"
-	reload
+	echo "Прошивка $n из $total: $(basename "$file") → $FW"
+	if ! reload; then
+		echo "Драйвер не поднял устройство, смотрите: dmesg | grep -i silead"
+		restore
+		return 1
+	fi
+	confirm || { restore; [ "$n" -lt "$total" ] && echo "Следующий кандидат: pero-touch-setup --next"; return 1; }
 }
+
+set_size() {
+	local size=$1 props x y
+	shift
+	x=${size%x*} y=${size#*x}
+	case "$x$y" in *[!0-9]*|"") echo "Размер в виде 1920x1200"; exit 1 ;; esac
+	props="MSSL1680:touchscreen-size-x=$x:touchscreen-size-y=$y"
+	for f in "$@"; do
+		case "$f" in
+			swap-xy) props="$props:touchscreen-swapped-x-y" ;;
+			invert-x) props="$props:touchscreen-inverted-x" ;;
+			invert-y) props="$props:touchscreen-inverted-y" ;;
+			*) echo "Неизвестный флаг: $f"; exit 1 ;;
+		esac
+	done
+	mkdir -p "${GRUBCFG%/*}"
+	cat >"$GRUBCFG" <<EOF
+# pero-touch-setup: Silead touch panel geometry
+GRUB_CMDLINE_LINUX_DEFAULT="\$GRUB_CMDLINE_LINUX_DEFAULT i2c_touchscreen_props=$props"
+EOF
+	update-grub
+	echo "Параметр ядра: i2c_touchscreen_props=$props"
+	echo "Применится после перезагрузки."
+}
+
+case "$1" in
+--undo)
+	rm -f "$FW" "$WORK/previous.fw" "$WORK/current" "$GRUBCFG"
+	command -v update-grub >/dev/null && update-grub
+	drop_gslx680
+	reload || true
+	echo "Прошивка и параметры сенсора удалены. Перезагрузите планшет."
+	exit 0
+	;;
+--size)
+	shift
+	set_size "$@"
+	exit 0
+	;;
+esac
 
 if ! has_silead; then
 	echo "Контроллер Silead (MSSL*) не найден — этой утилите здесь делать нечего."
@@ -66,8 +161,10 @@ if ! has_silead; then
 	exit 0
 fi
 
+drop_gslx680
+
 if [ "$1" = "--next" ]; then
-	install_candidate $(( $(cat "$WORK/current" 2>/dev/null || echo 0) + 1 ))
+	install_candidate $(( $(cat "$WORK/current" 2>/dev/null || echo 0) + 1 )) || exit 1
 	exit 0
 fi
 
@@ -75,21 +172,20 @@ if [ -n "$1" ]; then
 	cp "$1" "$WORK/SileadTouch.sys"
 elif ! find_driver; then
 	echo "SileadTouch.sys не найден на разделах Windows."
-	echo "Скопируйте его с флешки и запустите: pero-touch-setup /путь/SileadTouch.sys"
+	echo "Он есть в пакете драйверов Windows для iWork 10 Pro с сайта Alldocube"
+	echo "(или в C:\\Windows\\System32\\drivers на планшете с Windows)."
+	echo "Скопируйте его на флешку и запустите: pero-touch-setup /путь/SileadTouch.sys"
 	exit 1
 fi
 
 cd "$WORK"
 rm -f firmware_*.fw
 perl "$TOOLS/scanwindrv" SileadTouch.sys
-install_candidate 1
+install_candidate 1 || exit 1
 
 cat <<'EOF'
 
-Если касания идут мимо (оси перевёрнуты или масштаб неверный), добавьте в
-/etc/default/grub в GRUB_CMDLINE_LINUX_DEFAULT параметр вида
-  i2c_touchscreen_props=MSSL1680:touchscreen-size-x=1920:touchscreen-size-y=1200
-(при необходимости :touchscreen-swapped-x-y:touchscreen-inverted-x)
-и выполните: sudo update-grub && reboot
-Другая прошивка-кандидат: pero-touch-setup --next
+Если касания идут мимо (сжато в угол, оси перевёрнуты), задайте геометрию панели:
+  pero-touch-setup --size 1920x1200 [swap-xy] [invert-x] [invert-y]
+и перезагрузитесь. Вернуть всё как было: pero-touch-setup --undo
 EOF
