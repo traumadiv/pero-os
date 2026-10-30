@@ -345,7 +345,7 @@ class Panel(Gtk.Application):
 			("applets-screenshooter-symbolic", "Снимок", ("xfce4-screenshooter", "-f", "-d", "1")),
 			("preferences-system-symbolic", "Настройки", ("xfce4-settings-manager",)),
 			("system-lock-screen-symbolic", "Блокировка", ("xflock4",)),
-			("weather-clear-night-symbolic", "Сон", ("systemctl", "suspend")),
+			("weather-clear-night-symbolic", "Экран", ("pero-screen-off",)),
 			("system-shutdown-symbolic", "Выключить", ("xfce4-session-logout",)),
 		):
 			col = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)

@@ -11,6 +11,8 @@ install -m 0644 /usr/share/pero/calamares/packages.conf /etc/calamares/modules/
 install -m 0644 /usr/share/pero/zramswap /etc/default/zramswap
 chmod 0755 /usr/local/sbin/pero-grub-install /usr/local/sbin/pero-power-source /usr/local/sbin/pero-power-log /usr/local/sbin/pero-update /usr/lib/systemd/system-sleep/pero-radios
 systemctl enable pero-power-source.service pero-power-log.timer
+# The tablet never wakes from suspend: no sleep at all (pero-screen-off instead)
+systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target suspend-then-hibernate.target
 sed -i 's/^grubInstall:.*/grubInstall: "pero-grub-install"/' /etc/calamares/modules/bootloader.conf
 # A short or dictionary password gets a warning, never a dead end
 grep -q '^allowWeakPasswords' /etc/calamares/modules/users.conf ||

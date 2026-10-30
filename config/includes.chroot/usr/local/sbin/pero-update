@@ -66,6 +66,10 @@ fi
 # journal kept across reboots: a tablet that switched itself off can tell why
 systemctl restart systemd-journald 2>/dev/null || true
 systemctl reset-failed pero-power-source.service 2>/dev/null || true
+# The tablet never wakes from suspend (s2idle) and boots anew: no sleep at all.
+# The power key locks, the quick settings tile switches the screen off.
+systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target \
+	suspend-then-hibernate.target 2>/dev/null || true
 # logind rereads its config on SIGHUP (no restart under a running session)
 systemctl kill -s HUP systemd-logind 2>/dev/null || true
 udevadm control --reload
@@ -99,11 +103,12 @@ if [ "$USER_NAME" != root ]; then
 	xset_prop xsettings /Net/DoubleClickTime int 500
 	xset_prop xsettings /Net/DoubleClickDistance int 40
 	xset_prop xsettings /Net/DndDragThreshold int 16
-	# On "critical" charge sleep, not power off: the AXP288 gauge can jump to a
-	# few percent with charge left, and sleeping keeps the work
-	as_user xfconf-query -c xfce4-power-manager -p /xfce4-power-manager/critical-power-action \
-		-n -t uint -s 1 2>/dev/null ||
-		as_user xfconf-query -c xfce4-power-manager -p /xfce4-power-manager/critical-power-action -s 1 2>/dev/null || true
+	# No sleeping from the power manager: not when idle, not on "critical" charge
+	# (the AXP288 gauge misreads; a really empty battery is cut by the PMIC)
+	xset_prop xfce4-power-manager /xfce4-power-manager/critical-power-action uint 0
+	xset_prop xfce4-power-manager /xfce4-power-manager/inactivity-on-ac uint 14   # 14 = never
+	xset_prop xfce4-power-manager /xfce4-power-manager/inactivity-on-battery uint 14
+	xset_prop xfce4-power-manager /xfce4-power-manager/power-button-action uint 0
 	# The lid is logind's (which ignores it): turning the tablet over put it to sleep
 	as_user xfconf-query -c xfce4-power-manager -p /xfce4-power-manager/logind-handle-lid-switch \
 		-n -t bool -s true 2>/dev/null ||

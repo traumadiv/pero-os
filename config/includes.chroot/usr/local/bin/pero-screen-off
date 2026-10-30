@@ -1,0 +1,8 @@
+#!/bin/sh
+# pero-screen-off — lock and switch the screen off right away. What "sleep" is on
+# this tablet: it never comes back from real suspend (s2idle), so Pero OS keeps
+# it running with the screen dark (the CPU idles on its own). Any tap or key
+# wakes the screen to the lock screen.
+xflock4 2>/dev/null || light-locker-command -l 2>/dev/null
+sleep 1
+xset dpms force off
