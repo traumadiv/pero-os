@@ -41,6 +41,7 @@ if [ ! -e "$FWDIR/mssl1680.fw" ] || [ -L "$FWDIR/mssl1680.fw" ]; then
 	echo "mssl1680.fw → gsl-alldocube-iwork10-pro.fw"
 else
 	echo "Оставляю установленную вручную прошивку ($FWDIR/mssl1680.fw)"
+	echo "Вернуть штатную прошивку iWork 10 Pro: sudo pero-touch-setup --undo"
 fi
 
 step "Питание"
