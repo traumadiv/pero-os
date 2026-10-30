@@ -22,7 +22,6 @@ i2c-tools
 evtest
 acpi
 zram-tools
-thermald
 power-profiles-daemon
 xdg-user-dirs
 xdg-utils

@@ -25,18 +25,21 @@ if [ ! -e /run/pero-power-log.seen ]; then
 	touch /run/pero-power-log.seen
 fi
 
-temp=0
-for z in /sys/class/thermal/thermal_zone*/temp; do
-	t=$(cat "$z" 2>/dev/null) || continue
+# hottest zone, and every zone by name: one sensor of the AXP288 PMIC reads
+# nonsense on battery, and this shows which
+temp=0 zones=
+for z in /sys/class/thermal/thermal_zone*; do
+	t=$(cat "$z/temp" 2>/dev/null) || continue
 	[ "${t:-0}" -gt "$temp" ] && temp=$t
+	zones="$zones $(cat "$z/type" 2>/dev/null):$(( ${t:-0} / 1000 ))"
 done
 
 v() { cat "$bat/$1" 2>/dev/null || echo -; }
 # µV / µA in sysfs to mV / mA; "-" when the gauge does not report it
 milli() { n=$(cat "$bat/$1" 2>/dev/null | tr -dc 0-9-); [ -n "$n" ] && echo $(( n / 1000 )) || echo -; }
-printf '%s cap=%s%% status=%s ac=%s volt=%smV curr=%smA temp=%sC load=%s\n' \
+printf '%s cap=%s%% status=%s ac=%s volt=%smV curr=%smA temp=%sC load=%s zones=%s\n' \
 	"$(date '+%F %T')" "$(v capacity)" "$(v status)" "$ac" "$(milli voltage_now)" "$(milli current_now)" \
-	"$(( temp / 1000 ))" "$(cut -d' ' -f1 /proc/loadavg)" >>"$LOG"
+	"$(( temp / 1000 ))" "$(cut -d' ' -f1 /proc/loadavg)" "${zones# }" >>"$LOG"
 
 # keep it small: ~2 days of minutes
 if [ "$(wc -l <"$LOG")" -gt 3200 ]; then

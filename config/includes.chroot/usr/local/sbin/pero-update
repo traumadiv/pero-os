@@ -57,6 +57,12 @@ ls -l /usr/lib/firmware/silead/mssl1680.fw
 step "Питание"
 systemctl daemon-reload
 systemctl enable --now pero-power-source.service pero-power-log.timer || true
+# thermald switched the tablet off on battery: a sensor of the AXP288 PMIC reads
+# "critical" there at 45 °C. The kernel's own thermal trips still protect it.
+if systemctl list-unit-files thermald.service >/dev/null 2>&1; then
+	systemctl disable --now thermald.service 2>/dev/null || true
+	systemctl mask thermald.service 2>/dev/null || true
+fi
 # journal kept across reboots: a tablet that switched itself off can tell why
 systemctl restart systemd-journald 2>/dev/null || true
 systemctl reset-failed pero-power-source.service 2>/dev/null || true
