@@ -2,9 +2,11 @@
 # pero-touch-setup — make a Silead (MSSL1680) touchscreen work.
 #
 # Silead controllers need a per-tablet firmware blob that Linux distributions
-# cannot ship. Windows tablets carry it inside the Windows touch driver, so this
-# tool finds SileadTouch.sys on the internal Windows partition (or takes a path),
-# extracts the firmware and installs it as /lib/firmware/silead/mssl1680.fw.
+# cannot ship. Pero OS carries the one from the iWork 10 Pro Windows driver
+# (mssl1680.fw links to it). Other tablets carry theirs inside the Windows
+# touch driver, so this tool finds SileadTouch.sys on the internal Windows
+# partition (or takes a path), extracts the firmware and installs it as
+# /lib/firmware/silead/mssl1680.fw.
 # Firmware from another tablet makes the controller report phantom touches all
 # over the screen, so every candidate is tried with a 30-second rollback: if the
 # touch is not confirmed with Enter, the previous state comes back on its own.
@@ -14,7 +16,7 @@
 #   pero-touch-setup --next            try the next firmware candidate
 #   pero-touch-setup --size 1920x1200 [swap-xy] [invert-x] [invert-y]
 #                                      touch panel geometry (kernel parameter)
-#   pero-touch-setup --undo            remove the firmware and geometry, back to stock
+#   pero-touch-setup --undo            back to the stock iWork 10 Pro firmware and geometry
 
 set -e
 [ "$(id -u)" -ne 0 ] && exec pkexec "$0" "$@"
@@ -22,7 +24,9 @@ set -e
 TOOLS=/usr/share/pero/gsl-tools
 WORK=/var/lib/pero/touch
 FW=/lib/firmware/silead/mssl1680.fw
-GRUBCFG=/etc/default/grub.d/90-pero-touch.cfg
+STOCK_FW=gsl-alldocube-iwork10-pro.fw
+STOCK_SIZE="1920x1200"
+GRUBCFG=/etc/default/grub.d/80-pero-touch.cfg
 mkdir -p "$WORK" /lib/firmware/silead
 
 has_silead() { grep -qs '^MSSL' /sys/bus/acpi/devices/*/hid; }
@@ -53,14 +57,12 @@ reload() {
 	grep -q silead /proc/bus/input/devices
 }
 
-backup() { [ -e "$FW" ] && cp "$FW" "$WORK/previous.fw" || rm -f "$WORK/previous.fw"; }
+# -P keeps the stock symlink a symlink
+backup() { rm -f "$WORK/previous.fw"; [ -e "$FW" ] && cp -P "$FW" "$WORK/previous.fw"; true; }
 
 restore() {
-	if [ -e "$WORK/previous.fw" ]; then
-		install -m 0644 "$WORK/previous.fw" "$FW"
-	else
-		rm -f "$FW"
-	fi
+	rm -f "$FW"
+	[ -L "$WORK/previous.fw" ] || [ -e "$WORK/previous.fw" ] && cp -P "$WORK/previous.fw" "$FW"
 	reload || true
 }
 
@@ -120,7 +122,7 @@ set_size() {
 	shift
 	x=${size%x*} y=${size#*x}
 	case "$x$y" in *[!0-9]*|"") echo "Размер в виде 1920x1200"; exit 1 ;; esac
-	props="MSSL1680:touchscreen-size-x=$x:touchscreen-size-y=$y"
+	props="MSSL1680:touchscreen-size-x=$x:touchscreen-size-y=$y:silead,max-fingers=10"
 	for f in "$@"; do
 		case "$f" in
 			swap-xy) props="$props:touchscreen-swapped-x-y" ;;
@@ -131,7 +133,7 @@ set_size() {
 	done
 	mkdir -p "${GRUBCFG%/*}"
 	cat >"$GRUBCFG" <<EOF
-# pero-touch-setup: Silead touch panel geometry
+# Silead touch panel geometry (pero-touch-setup --size)
 GRUB_CMDLINE_LINUX_DEFAULT="\$GRUB_CMDLINE_LINUX_DEFAULT i2c_touchscreen_props=$props"
 EOF
 	update-grub
@@ -141,11 +143,12 @@ EOF
 
 case "$1" in
 --undo)
-	rm -f "$FW" "$WORK/previous.fw" "$WORK/current" "$GRUBCFG"
-	command -v update-grub >/dev/null && update-grub
+	rm -f "$FW" "$WORK/previous.fw" "$WORK/current"
+	[ -e "${FW%/*}/$STOCK_FW" ] && ln -s "$STOCK_FW" "$FW"
 	drop_gslx680
+	set_size "$STOCK_SIZE"
 	reload || true
-	echo "Прошивка и параметры сенсора удалены. Перезагрузите планшет."
+	echo "Вернул штатную прошивку и геометрию сенсора. Перезагрузите планшет."
 	exit 0
 	;;
 --size)

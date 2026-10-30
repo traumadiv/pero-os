@@ -11,6 +11,9 @@ install -m 0644 /usr/share/pero/calamares/packages.conf /etc/calamares/modules/
 install -m 0644 /usr/share/pero/zramswap /etc/default/zramswap
 chmod 0755 /usr/local/sbin/pero-grub-install /usr/local/sbin/pero-power-source /usr/lib/systemd/system-sleep/pero-radios
 systemctl enable pero-power-source.service
+# Touchscreen: the iWork 10 Pro firmware (from its Windows driver) is what the
+# silead driver loads by default; pero-touch-setup may replace the link
+ln -sf gsl-alldocube-iwork10-pro.fw /usr/lib/firmware/silead/mssl1680.fw
 sed -i 's/^grubInstall:.*/grubInstall: "pero-grub-install"/' /etc/calamares/modules/bootloader.conf
 # A short or dictionary password gets a warning, never a dead end
 grep -q '^allowWeakPasswords' /etc/calamares/modules/users.conf ||
