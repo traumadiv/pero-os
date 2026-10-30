@@ -66,6 +66,7 @@ class Calibration:
 	def reset(self):
 		self.m, self.post = self.IDENTITY, self.IDENTITY
 		self.kx = self.ky = None
+		self.raw = False
 
 	def update(self):
 		stamp = os.path.exists(RAW_FLAG)
@@ -79,7 +80,8 @@ class Calibration:
 			return
 		self.stamp = stamp
 		self.reset()
-		if os.path.exists(RAW_FLAG) or not isinstance(stamp, tuple):
+		self.raw = os.path.exists(RAW_FLAG)
+		if self.raw or not isinstance(stamp, tuple):
 			return
 		try:
 			self.load(open(stamp[1]).read())
@@ -188,6 +190,11 @@ class Touch:
 	def event(self, ev):
 		if self.state == self.IDLE and not self.buf:
 			CAL.update()   # a new touch: pick up a fresh calibration before mapping it
+		if CAL.raw and self.state == self.IDLE and not self.buf:
+			# pero-touch-calibrate is measuring: no gestures (a careful long tap on
+			# a cross must not turn into a right click), everything straight through
+			self.clone.write_event(ev)
+			return
 		if ev.type == e.EV_ABS:
 			if ev.code == e.ABS_MT_SLOT:
 				self.slot = ev.value
@@ -228,7 +235,9 @@ class Touch:
 	def calibrated(self, ev):
 		"""(code, value) pairs to send for ev: positions go through the calibration.
 		A mapping can mix the axes, so a change of X or Y sends both."""
-		if ev.type != e.EV_ABS:
+		if ev.type != e.EV_ABS or CAL.raw:
+			# while pero-touch-calibrate measures: exactly what the panel says,
+			# not even clamped to its range (edge taps must not merge)
 			return [(ev.code, ev.value)]
 		if ev.code in (e.ABS_MT_POSITION_X, e.ABS_MT_POSITION_Y):
 			u, v = self.pos.get(self.slot, (None, None))

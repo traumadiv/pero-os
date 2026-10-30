@@ -29,6 +29,8 @@ LINE = (0.03, 0.15, 0.3, 0.5, 0.7, 0.85, 0.97)
 # top to bottom through the centre, then left to right (the centre once)
 TARGETS = [(0.5, t) for t in LINE] + [(t, 0.5) for t in LINE if t != 0.5]
 IDLE = 60   # s without taps before giving up
+TRIES = 3   # rounds before taking the best that came out
+LOG = os.path.expanduser("~/.cache/pero-touch-calibrate.log")
 
 
 def run(*cmd):
@@ -118,7 +120,7 @@ def knots(m, points, axis):
 	out = sorted(((m[0] * u + m[1] * v + m[2], m[3] * u + m[4] * v + m[5])[axis], t[axis])
 		for (u, v), t in on_line(points, axis))
 	# out of order or bunched up: a tap slipped onto the wrong cross
-	if any(b[1] <= a[1] or b[0] - a[0] < 0.03 for a, b in zip(out, out[1:])):
+	if any(b[1] <= a[1] or b[0] - a[0] < 0.01 for a, b in zip(out, out[1:])):
 		return None
 	return out
 
@@ -151,13 +153,31 @@ def fits(mod, points, tol=0.05):
 		for (u, v), (tx, ty) in points) < tol
 
 
+def affine_only(points):
+	m = solve(points)
+	return (m, None, None) if m else None
+
+
+def log(rnd, points, mod):
+	"""What the taps were, for when a calibration still comes out wrong."""
+	try:
+		os.makedirs(os.path.dirname(LOG), exist_ok=True)
+		with open(LOG, "a") as f:
+			f.write(f"round {rnd} ok={bool(mod)}\n")
+			for (u, v), (tx, ty) in points:
+				f.write(f"  target {tx:.2f} {ty:.2f}  device {u:.4f} {v:.4f}\n")
+	except OSError:
+		pass
+
+
 def calibrate(dev):
 	import gi
 	gi.require_version("Gtk", "3.0")
 	from gi.repository import Gdk, GLib, Gtk
 
 	rx, ry = dev.absinfo(e.ABS_X), dev.absinfo(e.ABS_Y)
-	state = {"u": None, "v": None, "down": False, "timer": None, "result": None}
+	state = {"u": None, "v": None, "down": False, "timer": None, "result": None,
+		"round": 1, "note": "", "flash": None}
 	taps = []
 
 	win = Gtk.Window(title="Калибровка сенсора")
@@ -174,13 +194,26 @@ def calibrate(dev):
 		cr.set_font_size(28)
 		text = f"Коснитесь центра крестика ({len(taps) + 1} из {len(TARGETS)})"
 		ext = cr.text_extents(text)
-		cr.move_to((w - ext.width) / 2, h / 2)
+		cr.move_to((w - ext.width) / 2, h / 2 - 50)
 		cr.show_text(text)
+		if state["note"]:
+			cr.set_source_rgb(1, 0.75, 0.3)
+			cr.set_font_size(20)
+			ext = cr.text_extents(state["note"])
+			cr.move_to((w - ext.width) / 2, h / 2 - 10)
+			cr.show_text(state["note"])
+			cr.set_source_rgb(0.9, 0.9, 0.9)
 		cr.set_font_size(18)
 		hint = "Esc — отмена, через минуту без касаний закроется само"
 		ext = cr.text_extents(hint)
-		cr.move_to((w - ext.width) / 2, h / 2 + 40)
+		cr.move_to((w - ext.width) / 2, h / 2 + 30)
 		cr.show_text(hint)
+		# the cross just tapped blinks green: the tap counted
+		if state["flash"]:
+			fx, fy = state["flash"]
+			cr.set_source_rgb(0.3, 0.85, 0.4)
+			cr.arc(fx * w, fy * h, 22, 0, 6.2832)
+			cr.fill()
 		tx, ty = TARGETS[min(len(taps), len(TARGETS) - 1)]
 		x, y = tx * w, ty * h
 		cr.set_source_rgb(1, 0.35, 0.2)
@@ -202,15 +235,32 @@ def calibrate(dev):
 			GLib.source_remove(state["timer"])
 		state["timer"] = GLib.timeout_add_seconds(IDLE, give_up)
 
+	def unflash():
+		state["flash"] = None
+		area.queue_draw()
+		return False
+
 	def tapped():
 		taps.append(((state["u"], state["v"]), TARGETS[len(taps)]))
+		state["flash"] = TARGETS[len(taps) - 1]
+		state["note"] = ""
+		GLib.timeout_add(250, unflash)
 		if len(taps) == len(TARGETS):
 			m = model(taps)
+			log(state["round"], taps, m)
 			if m and fits(m, taps):
 				state["result"] = m
 				Gtk.main_quit()
 				return
-			taps.clear()   # a finger slipped: start over
+			if state["round"] >= TRIES:
+				# no endless loop: keep what the taps give, as well as they give it
+				state["result"] = m or affine_only(taps)
+				Gtk.main_quit()
+				return
+			state["round"] += 1
+			state["note"] = (f"Касания не сошлись — давайте ещё раз (попытка {state['round']} из {TRIES}). "
+				"Касайтесь точно в центр.")
+			taps.clear()
 		area.queue_draw()
 
 	def readable(_fd, _cond):
@@ -280,12 +330,11 @@ def main():
 	# output) after pero-touchd, so the stored mapping ends by undoing that part
 	m, kx, ky = m
 	post = invert(screen_matrix(dev.name))
-	lines = [
-		"m " + " ".join(f"{v:.6f}" for v in m),
-		"x " + " ".join(f"{p:.6f} {q:.6f}" for p, q in kx),
-		"y " + " ".join(f"{p:.6f} {q:.6f}" for p, q in ky),
-		"post " + " ".join(f"{v:.6f}" for v in post),
-	]
+	lines = ["m " + " ".join(f"{v:.6f}" for v in m)]
+	for name, k in (("x", kx), ("y", ky)):
+		if k:
+			lines.append(name + " " + " ".join(f"{p:.6f} {q:.6f}" for p, q in k))
+	lines.append("post " + " ".join(f"{v:.6f}" for v in post))
 	os.makedirs(os.path.dirname(SAVE), exist_ok=True)
 	with open(SAVE, "w") as f:
 		f.write("\n".join(lines) + "\n")
