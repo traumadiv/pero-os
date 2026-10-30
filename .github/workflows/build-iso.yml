@@ -5,7 +5,7 @@ name: Build ISO
 on:
   push:
     branches: [main, "fix/**"]
-    paths-ignore: ["README.md", "test/**"]
+    paths-ignore: ["README.md", "test/**", ".github/workflows/release.yml"]
   workflow_dispatch:
 
 concurrency:

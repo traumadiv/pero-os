@@ -1,0 +1,56 @@
+# Push a tag v* → a GitHub release with the ISO from the latest successful
+# "Build ISO" run (no rebuild, the file is copied inside GitHub).
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Find the latest ISO build
+        id: run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          id=$(gh api "repos/${{ github.repository }}/actions/workflows/build-iso.yml/runs?status=success&per_page=1" --jq '.workflow_runs[0].id')
+          [ -n "$id" ] && [ "$id" != null ] || { echo "No successful Build ISO run"; exit 1; }
+          echo "id=$id" >>"$GITHUB_OUTPUT"
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: pero-os-iso
+          path: out
+          run-id: ${{ steps.run.outputs.id }}
+          github-token: ${{ github.token }}
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ls -lh out
+          gh release create "${{ github.ref_name }}" out/*.iso out/*.sha256 \
+            --repo "${{ github.repository }}" \
+            --title "Pero OS ${{ github.ref_name }}" \
+            --notes-file - <<'NOTES'
+          Образ Pero OS для Alldocube iWork 10 Pro.
+
+          **Что исправлено**
+          - GRUB сам загружает систему после установки (без консоли `grub>`), загрузчик лежит во всех путях, откуда его может запустить прошивка, включая пункт «Windows» меню Alldocube; мёртвые загрузочные записи (Android после стирания диска) удаляются.
+          - Сенсор работает сразу: родная прошивка Silead iWork 10 Pro, панель 1920×1200, отражённые оси учтены.
+          - На батарее сам включается режим «Экономия», простаивающие устройства засыпают.
+          - Обои не ломаются при повороте экрана.
+          - `sudo pero-update` обновляет установленную систему без переустановки.
+
+          **Установка**
+          1. Запишите ISO на флешку (Rufus в режиме DD или balenaEtcher).
+          2. Флешка и клавиатура через OTG, при включении F7 → флешка.
+          3. Проверьте сенсор и Wi-Fi в живой системе, затем «Установить» → «Стереть диск».
+          4. Если меню выбора ОС всё ещё появляется: BIOS → Boot → первым `debian` или `UEFI OS`.
+          NOTES
