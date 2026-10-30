@@ -1,13 +1,15 @@
 #!/usr/bin/python3
 """pero-touch-calibrate — four taps, and the touchscreen hits where the finger is.
 
-Shows nine crosses (corners, edge middles, centre; close to the edges) and
-reads the taps straight from the touchscreen device (not through X, so it
-works however wrong the current mapping is). The taps give
+Shows crosses along a vertical and a horizontal line through the centre, seven
+on each, from edge to edge, and reads the taps straight from the touchscreen
+device (not through X, so it works however wrong the current mapping is).
+The taps give
   - an affine map from what the touchscreen reports to the screen: mirroring,
     swapped axes, offset and scale at once;
-  - per axis, a piecewise-linear correction through the three columns / rows,
-    for Silead panels that squeeze their edges (the error grows toward an edge).
+  - per axis, a piecewise-linear correction through the seven taps on that
+    axis: Silead panels are not linear, they bend between the middle and the
+    edges, and a correction pinned only at the edges and the centre misses that.
 pero-touchd applies both to every touch from then on.
 
   pero-touch-calibrate          calibrate (Esc cancels, gives up after a minute idle)
@@ -23,8 +25,9 @@ from evdev import ecodes as e
 SAVE = os.path.expanduser("~/.config/pero/touch-calibration")
 RAW_FLAG = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "pero-touch-raw")
 CLONE = "pero-touch"
-GRID = (0.04, 0.5, 0.96)   # close to the edges: that is where the panel bends
-TARGETS = [(x, y) for y in GRID for x in GRID]
+LINE = (0.03, 0.15, 0.3, 0.5, 0.7, 0.85, 0.97)
+# top to bottom through the centre, then left to right (the centre once)
+TARGETS = [(0.5, t) for t in LINE] + [(t, 0.5) for t in LINE if t != 0.5]
 IDLE = 60   # s without taps before giving up
 
 
@@ -104,17 +107,18 @@ def cramer(s, r):
 	return out
 
 
+def on_line(points, axis):
+	"""The taps of the line along axis (0: horizontal line, 1: vertical line)."""
+	return [p for p in points if abs(p[1][1 - axis] - 0.5) < 1e-6]
+
+
 def knots(m, points, axis):
 	"""Piecewise-linear correction for one screen axis after the affine map m:
-	(where the affine map put a column / row, where it is) for each grid line."""
-	out = []
-	for g in GRID:
-		got = [(m[0] * u + m[1] * v + m[2], m[3] * u + m[4] * v + m[5])[axis]
-			for (u, v), t in points if abs(t[axis] - g) < 1e-6]
-		out.append((sum(got) / len(got), g))
-	out.sort()
-	# a fold (two grid lines in the wrong order) means a slipped tap
-	if any(b[0] - a[0] < 0.05 for a, b in zip(out, out[1:])):
+	(where the affine map put a tap, where its cross is) along that axis."""
+	out = sorted(((m[0] * u + m[1] * v + m[2], m[3] * u + m[4] * v + m[5])[axis], t[axis])
+		for (u, v), t in on_line(points, axis))
+	# out of order or bunched up: a tap slipped onto the wrong cross
+	if any(b[1] <= a[1] or b[0] - a[0] < 0.03 for a, b in zip(out, out[1:])):
 		return None
 	return out
 
@@ -140,8 +144,8 @@ def model(points):
 
 
 def fits(mod, points, tol=0.05):
-	"""Every tap within tol of its cross after the full correction: a tap that
-	slipped would be the odd one out in its row or column."""
+	"""The taps of each line stay on that line after the full correction (along
+	the line the knots fit exactly): a slipped tap would stray off it."""
 	m, kx, ky = mod
 	return max(abs(bend(kx, m[0] * u + m[1] * v + m[2]) - tx) + abs(bend(ky, m[3] * u + m[4] * v + m[5]) - ty)
 		for (u, v), (tx, ty) in points) < tol

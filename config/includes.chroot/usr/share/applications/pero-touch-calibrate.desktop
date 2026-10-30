@@ -2,8 +2,8 @@
 Type=Application
 Name=Touchscreen calibration
 Name[ru]=Калибровка сенсора
-Comment=Tap nine crosses so touches land under the finger
-Comment[ru]=Коснуться девяти крестиков (до самых краёв), чтобы касания попадали под палец
+Comment=Tap 13 crosses so touches land under the finger
+Comment[ru]=Коснуться 13 крестиков (по вертикали и горизонтали через центр, до самых краёв), чтобы касания попадали под палец
 Exec=pero-touch-calibrate
 Icon=input-touchscreen
 Terminal=false
