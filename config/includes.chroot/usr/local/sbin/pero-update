@@ -35,16 +35,16 @@ SRC="$TMP/config/includes.chroot"
 step "Файлы Pero OS"
 # The installer and the live session's own files have no business on an
 # installed system; /etc/skel only matters for new users (see below for yours).
-rsync -rlt --exclude=/etc/calamares/ --exclude=/usr/share/pero/calamares/ \
-	--exclude=/etc/skel/ "$SRC/" /
-# Gone from Pero OS: the firmware picker, its tools and the old gesture daemon
+# Gone from Pero OS (removed before the copy, so nothing current is ever lost):
+# the firmware picker and its tools, pero-rightclick, the X-side calibration
 rm -f /usr/local/bin/pero-touch-setup /usr/share/applications/pero-touch-setup.desktop \
-	/usr/local/bin/pero-touchd /usr/lib/pero/pero-touchd.py /etc/xdg/autostart/pero-touchd.desktop \
 	/usr/lib/firmware/silead/gsl-alldocube-iwork10-pro.fw /etc/default/grub.d/90-pero-touch.cfg \
 	/etc/modprobe.d/pero-no-gslx680.conf /etc/xdg/autostart/pero-rightclick.desktop \
 	/usr/local/bin/pero-rightclick /usr/lib/pero/pero-rightclick.py \
 	/etc/X11/xorg.conf.d/99-pero-touch-calibration.conf
 rm -rf /usr/share/pero/gsl-tools /var/lib/pero/touch
+rsync -rlt --exclude=/etc/calamares/ --exclude=/usr/share/pero/calamares/ \
+	--exclude=/etc/skel/ "$SRC/" /
 chmod 0755 /usr/local/bin/pero-* /usr/local/sbin/pero-* /usr/lib/pero/*.py \
 	/usr/lib/systemd/system-sleep/pero-radios
 install -m 0644 /usr/share/pero/zramswap /etc/default/zramswap
