@@ -146,6 +146,7 @@ def calibrate():
 			cr.stroke()
 
 	def press(_w, ev):
+		rearm()
 		# A touch can come as a touch event, as the pointer press X emulates
 		# from it, or both: one tap counts once
 		if ev.type == Gdk.EventType.TOUCH_BEGIN:
@@ -193,8 +194,6 @@ def calibrate():
 		timer["id"] = GLib.timeout_add_seconds(60, idle_out)
 		return False
 	rearm()
-	win.connect_after("button-press-event", rearm)
-	win.connect_after("touch-event", rearm)
 	Gtk.main()
 	win.destroy()
 	return result.get("m")
