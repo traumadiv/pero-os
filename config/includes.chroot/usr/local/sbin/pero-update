@@ -21,7 +21,7 @@ as_user() {
 	[ "$USER_NAME" != root ] || return 1
 	local uid home
 	uid=$(id -u "$USER_NAME") home=$(getent passwd "$USER_NAME" | cut -d: -f6)
-	sudo -u "$USER_NAME" DISPLAY=:0 XAUTHORITY="$home/.Xauthority" \
+	sudo -u "$USER_NAME" DISPLAY=:0 XAUTHORITY="$home/.Xauthority" XDG_RUNTIME_DIR="/run/user/$uid" \
 		DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" "$@"
 }
 
@@ -41,11 +41,10 @@ rsync -rlt --exclude=/etc/calamares/ --exclude=/usr/share/pero/calamares/ \
 rm -f /usr/local/bin/pero-touch-setup /usr/share/applications/pero-touch-setup.desktop \
 	/usr/local/bin/pero-touchd /usr/lib/pero/pero-touchd.py /etc/xdg/autostart/pero-touchd.desktop \
 	/usr/lib/firmware/silead/gsl-alldocube-iwork10-pro.fw /etc/default/grub.d/90-pero-touch.cfg \
-	/etc/modprobe.d/pero-no-gslx680.conf /etc/xdg/autostart/pero-rightclick.desktop
+	/etc/modprobe.d/pero-no-gslx680.conf /etc/xdg/autostart/pero-rightclick.desktop \
+	/usr/local/bin/pero-rightclick /usr/lib/pero/pero-rightclick.py \
+	/etc/X11/xorg.conf.d/99-pero-touch-calibration.conf
 rm -rf /usr/share/pero/gsl-tools /var/lib/pero/touch
-# The finger right click sat between the touchscreen and X and cut touches
-# short; the touchscreen now goes to X straight from the silead driver
-pkill -f '/usr/lib/pero/pero-(touchd|rightclick).py' || true
 chmod 0755 /usr/local/bin/pero-* /usr/local/sbin/pero-* /usr/lib/pero/*.py \
 	/usr/lib/systemd/system-sleep/pero-radios
 install -m 0644 /usr/share/pero/zramswap /etc/default/zramswap
@@ -92,14 +91,22 @@ fi
 
 glib-compile-schemas /usr/share/glib-2.0/schemas
 
-step "Калибровка сенсора"
-if grep -qs '^MSSL' /sys/bus/acpi/devices/*/hid && as_user true 2>/dev/null; then
+step "Сенсор: pero-touchd и калибровка"
+if as_user xinput list >/dev/null 2>&1; then
+	# Restart the gesture daemon with the new code; any X-side calibration from
+	# older versions goes, pero-touchd does the mapping now
+	pkill -f '/usr/lib/pero/pero-(touchd|rightclick).py' || true
+	for d in $(as_user xinput list --id-only); do
+		as_user xinput list-props "$d" 2>/dev/null | grep -q 'libinput Calibration Matrix' &&
+			as_user xinput set-prop "$d" 'libinput Calibration Matrix' 1 0 0 0 1 0 0 0 1 || true
+	done
+	as_user setsid -f /usr/local/bin/pero-touchd >/dev/null 2>&1 || true
+	sleep 3
 	echo "На экране появятся 4 крестика: коснитесь пальцем центра каждого."
-	if m=$(as_user /usr/local/bin/pero-touch-calibrate --print); then
-		/usr/local/bin/pero-touch-calibrate --save "$m"
-	else
+	as_user /usr/local/bin/pero-touch-calibrate ||
 		echo "Пропущено. Позже: меню → Система → «Калибровка сенсора»."
-	fi
+else
+	echo "Нет запущенного рабочего стола: калибровка — после входа, меню → Система → «Калибровка сенсора»."
 fi
 
 step "Готово"

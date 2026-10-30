@@ -1,25 +1,27 @@
 #!/usr/bin/python3
 """pero-touch-calibrate — four taps, and the touchscreen hits where the finger is.
 
-Shows a cross in each corner of the screen; the taps give the mapping from
-what the touchscreen reports to the screen (mirroring, swapped axes, offset and
-scale in one affine matrix). It is stored as the libinput calibration matrix of
-every touchscreen, system-wide (/etc/X11/xorg.conf.d), so the login screen
-gets it too, and applied to the running session at once.
+Shows a cross in each corner of the screen and reads the taps straight from the
+touchscreen device (not through X, so it works however wrong the current
+mapping is). The taps give the affine map from what the touchscreen reports to
+the screen: mirroring, swapped axes, offset and scale at once. pero-touchd
+applies it to every touch from then on.
 
-  pero-touch-calibrate              calibrate, then save (asks for the password)
-  pero-touch-calibrate --print      calibrate and only print the matrix (pero-update saves it)
-  pero-touch-calibrate --save "a b c d e f"   (root) write the matrix
-  pero-touch-calibrate --reset      (root) remove the calibration
+  pero-touch-calibrate          calibrate (Esc cancels, gives up after a minute idle)
+  pero-touch-calibrate --reset  forget the calibration
 """
 import os
 import subprocess
 import sys
 
-CONF = "/etc/X11/xorg.conf.d/99-pero-touch-calibration.conf"
-PROP = "libinput Calibration Matrix"
-IDENTITY = [1, 0, 0, 0, 1, 0]
+import evdev
+from evdev import ecodes as e
+
+SAVE = os.path.expanduser("~/.config/pero/touch-calibration")
+RAW_FLAG = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "pero-touch-raw")
+CLONE = "pero-touch"
 TARGETS = [(0.1, 0.1), (0.9, 0.1), (0.1, 0.9), (0.9, 0.9)]
+IDLE = 60   # s without taps before giving up
 
 
 def run(*cmd):
@@ -29,47 +31,57 @@ def run(*cmd):
 		return ""
 
 
-def touch_devices():
-	"""X input devices of touchscreens: the absolute ones with a calibration matrix."""
-	ids = []
-	for line in run("xinput", "list", "--id-only").split():
-		props = run("xinput", "list-props", line)
-		if PROP in props and "Coordinate Transformation Matrix" in props:
-			if "libinput Accel Speed" not in props:   # touchpads and mice have it
-				ids.append(line)
-	return ids
+def touchscreen():
+	"""pero-touchd's clone when it runs (it has the original grabbed), else the
+	touchscreen itself."""
+	found = None
+	for path in evdev.list_devices():
+		try:
+			dev = evdev.InputDevice(path)
+		except OSError:
+			continue
+		caps = dev.capabilities(absinfo=False)
+		if e.ABS_X in caps.get(e.EV_ABS, []) and e.INPUT_PROP_DIRECT in dev.input_props():
+			if dev.name == CLONE:
+				return dev
+			found = found or dev
+	return found
 
 
-def set_matrix(m):
-	vals = [str(round(v, 6)) for v in m] + ["0", "0", "1"]
-	for dev in touch_devices():
-		subprocess.run(["xinput", "set-prop", dev, PROP] + vals, capture_output=True)
+def screen_matrix(name):
+	"""X's Coordinate Transformation Matrix of the device: rotation / output mapping
+	applied after our calibration."""
+	for line in run("xinput", "list-props", name).splitlines():
+		if "Coordinate Transformation Matrix" in line:
+			v = [float(x) for x in line.split(":", 1)[1].split(",")]
+			return v[:6]
+	return [1, 0, 0, 0, 1, 0]
 
 
-def save(m):
-	os.makedirs(os.path.dirname(CONF), exist_ok=True)
-	vals = " ".join(str(round(v, 6)) for v in m) + " 0 0 1"
-	with open(CONF, "w") as f:
-		f.write(f"""# pero-touch-calibrate: where the touchscreen's reports land on the screen
-Section "InputClass"
-	Identifier "pero touch calibration"
-	MatchIsTouchscreen "on"
-	MatchDriver "libinput"
-	Option "CalibrationMatrix" "{vals}"
-EndSection
-""")
+def invert(m):
+	a, b, c, d, f, g = m
+	det = a * f - b * d
+	if abs(det) < 1e-9:
+		return [1, 0, 0, 0, 1, 0]
+	ia, ib, id_, if_ = f / det, -b / det, -d / det, a / det
+	return [ia, ib, -(ia * c + ib * g), id_, if_, -(id_ * c + if_ * g)]
+
+
+def compose(p, q):
+	"""p after q, both affine (a b c / d e f)."""
+	return [p[0] * q[0] + p[1] * q[3], p[0] * q[1] + p[1] * q[4], p[0] * q[2] + p[1] * q[5] + p[2],
+		p[3] * q[0] + p[4] * q[3], p[3] * q[1] + p[4] * q[4], p[3] * q[2] + p[4] * q[5] + p[5]]
 
 
 def solve(points):
-	"""Least-squares affine map (u, v) -> (x, y) over the tapped points."""
-	def row(target):
-		# normal equations A^T A p = A^T t for p = (a, b, c), rows (u, v, 1)
+	"""Least-squares affine map (u, v) -> target over the tapped points."""
+	def row(k):
 		s = [[0.0] * 3 for _ in range(3)]
 		r = [0.0] * 3
-		for (u, v), t in zip([p[0] for p in points], [p[1][target] for p in points]):
+		for (u, v), t in points:
 			a = (u, v, 1.0)
 			for i in range(3):
-				r[i] += a[i] * t
+				r[i] += a[i] * t[k]
 				for j in range(3):
 					s[i][j] += a[i] * a[j]
 		return cramer(s, r)
@@ -94,81 +106,93 @@ def cramer(s, r):
 	return out
 
 
-def calibrate():
+def fits(m, points, tol=0.06):
+	return max(abs(m[0] * u + m[1] * v + m[2] - tx) + abs(m[3] * u + m[4] * v + m[5] - ty)
+		for (u, v), (tx, ty) in points) < tol
+
+
+def calibrate(dev):
 	import gi
 	gi.require_version("Gtk", "3.0")
 	from gi.repository import Gdk, GLib, Gtk
 
-	# Measure what the touchscreen reports on its own, in the normal orientation
-	set_matrix(IDENTITY)
-	subprocess.run(["pero-rotate", "normal"], capture_output=True)
-
-	result = {}
+	rx, ry = dev.absinfo(e.ABS_X), dev.absinfo(e.ABS_Y)
+	state = {"u": None, "v": None, "down": False, "timer": None, "result": None}
 	taps = []
-	win = Gtk.Window()
-	win.set_title("Калибровка сенсора")
+
+	win = Gtk.Window(title="Калибровка сенсора")
 	win.fullscreen()
 	win.set_keep_above(True)
 	area = Gtk.DrawingArea()
 	win.add(area)
-	win.add_events(Gdk.EventMask.BUTTON_PRESS_MASK | Gdk.EventMask.TOUCH_MASK
-		| Gdk.EventMask.KEY_PRESS_MASK)
-	last = {"t": 0}
 
 	def draw(widget, cr):
 		w, h = widget.get_allocated_width(), widget.get_allocated_height()
 		cr.set_source_rgb(0.07, 0.07, 0.07)
 		cr.paint()
 		cr.set_source_rgb(0.9, 0.9, 0.9)
-		cr.select_font_face("Inter")
 		cr.set_font_size(28)
-		text = (f"Коснитесь крестика ({len(taps) + 1} из {len(TARGETS)})"
-			if len(taps) < len(TARGETS) else "Готово")
+		text = f"Коснитесь центра крестика ({len(taps) + 1} из {len(TARGETS)})"
 		ext = cr.text_extents(text)
 		cr.move_to((w - ext.width) / 2, h / 2)
 		cr.show_text(text)
 		cr.set_font_size(18)
-		hint = "Esc — отмена (сама закроется через минуту без касаний)"
+		hint = "Esc — отмена, через минуту без касаний закроется само"
 		ext = cr.text_extents(hint)
 		cr.move_to((w - ext.width) / 2, h / 2 + 40)
 		cr.show_text(hint)
-		if len(taps) < len(TARGETS):
-			tx, ty = TARGETS[len(taps)]
-			x, y = tx * w, ty * h
-			cr.set_source_rgb(1, 0.35, 0.2)
-			cr.set_line_width(4)
-			cr.move_to(x - 40, y)
-			cr.line_to(x + 40, y)
-			cr.move_to(x, y - 40)
-			cr.line_to(x, y + 40)
-			cr.stroke()
-			cr.arc(x, y, 14, 0, 6.2832)
-			cr.stroke()
+		tx, ty = TARGETS[min(len(taps), len(TARGETS) - 1)]
+		x, y = tx * w, ty * h
+		cr.set_source_rgb(1, 0.35, 0.2)
+		cr.set_line_width(4)
+		cr.move_to(x - 40, y)
+		cr.line_to(x + 40, y)
+		cr.move_to(x, y - 40)
+		cr.line_to(x, y + 40)
+		cr.stroke()
+		cr.arc(x, y, 14, 0, 6.2832)
+		cr.stroke()
 
-	def press(_w, ev):
-		rearm()
-		# A touch can come as a touch event, as the pointer press X emulates
-		# from it, or both: one tap counts once
-		if ev.type == Gdk.EventType.TOUCH_BEGIN:
-			pass
-		elif ev.type != Gdk.EventType.BUTTON_PRESS or ev.time - last["t"] < 400:
-			return True
-		last["t"] = ev.time
-		w, h = win.get_allocated_width(), win.get_allocated_height()
-		if not w or not h:
-			return True
-		taps.append(((ev.x_root / w, ev.y_root / h), TARGETS[len(taps)]))
-		area.queue_draw()
+	def give_up():
+		Gtk.main_quit()
+		return False
+
+	def rearm():
+		if state["timer"]:
+			GLib.source_remove(state["timer"])
+		state["timer"] = GLib.timeout_add_seconds(IDLE, give_up)
+
+	def tapped():
+		taps.append(((state["u"], state["v"]), TARGETS[len(taps)]))
 		if len(taps) == len(TARGETS):
 			m = solve(taps)
-			# taps that disagree with each other: the finger slipped, start over
-			if m and max(abs(m[0] * u + m[1] * v + m[2] - tx) + abs(m[3] * u + m[4] * v + m[5] - ty)
-					for (u, v), (tx, ty) in taps) < 0.06:
-				result["m"] = m
+			if m and fits(m, taps):
+				state["result"] = m
 				Gtk.main_quit()
-			else:
-				taps.clear()
-				area.queue_draw()
+				return
+			taps.clear()   # a finger slipped: start over
+		area.queue_draw()
+
+	def readable(_fd, _cond):
+		try:
+			for ev in dev.read():
+				if ev.type == e.EV_ABS and ev.code == e.ABS_X:
+					state["u"] = (ev.value - rx.min) / max(1, rx.max - rx.min)
+				elif ev.type == e.EV_ABS and ev.code == e.ABS_Y:
+					state["v"] = (ev.value - ry.min) / max(1, ry.max - ry.min)
+				elif ev.type == e.EV_KEY and ev.code == e.BTN_TOUCH:
+					if ev.value:
+						state["down"] = True
+						rearm()
+					elif state["down"]:
+						state["down"] = False
+						if state["u"] is not None and state["v"] is not None:
+							tapped()
+		except BlockingIOError:
+			pass
+		except OSError:
+			Gtk.main_quit()
+			return False
 		return True
 
 	def key(_w, ev):
@@ -177,60 +201,50 @@ def calibrate():
 		return True
 
 	area.connect("draw", draw)
-	win.connect("button-press-event", press)
-	win.connect("touch-event", press)
 	win.connect("key-press-event", key)
 	win.connect("destroy", Gtk.main_quit)
+	GLib.io_add_watch(dev.fd, GLib.IO_IN, readable)
 	win.show_all()
-	# Nobody tapping (the touchscreen is dead, or no one is there): give up
-	# instead of leaving a full-screen window and a waiting pero-update
-	timer = {"id": None}
-	def idle_out():
-		Gtk.main_quit()
-		return False
-	def rearm(*_a):
-		if timer["id"]:
-			GLib.source_remove(timer["id"])
-		timer["id"] = GLib.timeout_add_seconds(60, idle_out)
-		return False
 	rearm()
 	Gtk.main()
 	win.destroy()
-	return result.get("m")
+	return state["result"]
 
 
 def main():
-	args = sys.argv[1:]
-	if args[:1] == ["--save"]:
-		vals = [float(v) for v in args[1].split()][:6]
-		save(vals)
-		print(f"Сохранено: {CONF}")
-		return 0
-	if args[:1] == ["--reset"]:
+	if sys.argv[1:2] == ["--reset"]:
 		try:
-			os.remove(CONF)
+			os.remove(SAVE)
 		except FileNotFoundError:
 			pass
+		print("Калибровка сброшена")
 		return 0
 
-	old = None
-	m = calibrate()
-	if not m:
-		# Cancelled: put back what the session had
-		if os.path.exists(CONF):
-			for line in open(CONF):
-				if "CalibrationMatrix" in line:
-					old = [float(v) for v in line.split('"')[3].split()][:6]
-		set_matrix(old or IDENTITY)
-		print("Калибровка отменена", file=sys.stderr)
+	dev = touchscreen()
+	if dev is None:
+		print("Сенсорный экран не найден (нет устройства с касаниями).", file=sys.stderr)
 		return 1
-	set_matrix(m)
-	vals = " ".join(str(round(v, 6)) for v in m)
-	if args[:1] == ["--print"]:
-		print(vals)
-		return 0
-	subprocess.run(["pkexec", "/usr/local/bin/pero-touch-calibrate", "--save", vals])
-	print(vals)
+
+	# Measure in the normal orientation, with pero-touchd passing positions as they are
+	subprocess.run(["pero-rotate", "normal"], capture_output=True)
+	open(RAW_FLAG, "w").close()
+	try:
+		m = calibrate(dev)
+	finally:
+		os.remove(RAW_FLAG)
+	if not m:
+		print("Калибровка отменена, всё осталось как было", file=sys.stderr)
+		return 1
+
+	# The taps measured device -> screen; X still applies its own matrix (rotation,
+	# output) after pero-touchd, so the stored mapping undoes that part
+	m = compose(invert(screen_matrix(dev.name)), m)
+	os.makedirs(os.path.dirname(SAVE), exist_ok=True)
+	with open(SAVE, "w") as f:
+		f.write(" ".join(f"{v:.6f}" for v in m) + "\n")
+	print("Калибровка сохранена:", " ".join(f"{v:.4f}" for v in m))
+	if dev.name != CLONE:
+		print("pero-touchd не запущен: калибровка заработает, когда он запустится (после входа в систему).")
 	return 0
 
 
