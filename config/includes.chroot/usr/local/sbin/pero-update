@@ -102,7 +102,7 @@ if as_user xinput list >/dev/null 2>&1; then
 	done
 	as_user setsid -f /usr/local/bin/pero-touchd >/dev/null 2>&1 || true
 	sleep 3
-	echo "На экране появятся 4 крестика: коснитесь пальцем центра каждого."
+	echo "На экране появятся 9 крестиков: коснитесь пальцем центра каждого."
 	as_user /usr/local/bin/pero-touch-calibrate ||
 		echo "Пропущено. Позже: меню → Система → «Калибровка сенсора»."
 else

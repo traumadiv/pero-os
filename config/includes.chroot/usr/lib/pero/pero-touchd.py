@@ -52,13 +52,20 @@ def is_touchscreen(dev):
 
 
 class Calibration:
-	"""Device position (0..1) to corrected position (0..1): x = a u + b v + c, y = d u + e v + f."""
+	"""Device position (0..1) to corrected position (0..1), as pero-touch-calibrate
+	stored it: an affine map (m), a piecewise-linear bend per screen axis for
+	panels that squeeze their edges (x, y), then X's own matrix undone (post).
+	A file with just six numbers is an affine map alone."""
 
 	IDENTITY = (1.0, 0.0, 0.0, 0.0, 1.0, 0.0)
 
 	def __init__(self):
-		self.m = self.IDENTITY
+		self.reset()
 		self.stamp = None
+
+	def reset(self):
+		self.m, self.post = self.IDENTITY, self.IDENTITY
+		self.kx = self.ky = None
 
 	def update(self):
 		stamp = os.path.exists(RAW_FLAG)
@@ -71,19 +78,47 @@ class Calibration:
 		if stamp == self.stamp:
 			return
 		self.stamp = stamp
-		self.m = self.IDENTITY
+		self.reset()
 		if os.path.exists(RAW_FLAG) or not isinstance(stamp, tuple):
 			return
 		try:
-			vals = [float(x) for x in open(stamp[1]).read().split()[:6]]
-			if len(vals) == 6:
-				self.m = tuple(vals)
-		except (OSError, ValueError):
-			pass
+			self.load(open(stamp[1]).read())
+		except (OSError, ValueError, IndexError):
+			self.reset()
+
+	def load(self, text):
+		words = text.split()
+		if words and words[0][0] not in "mxyp":
+			self.m = tuple(float(w) for w in words[:6])
+			return
+		for line in text.splitlines():
+			key, *vals = line.split()
+			vals = [float(v) for v in vals]
+			if key == "m":
+				self.m = tuple(vals[:6])
+			elif key == "post":
+				self.post = tuple(vals[:6])
+			elif key in ("x", "y"):
+				k = sorted(zip(vals[0::2], vals[1::2]))
+				if len(k) >= 2:
+					setattr(self, "k" + key, k)
+
+	@staticmethod
+	def affine(m, u, v):
+		return m[0] * u + m[1] * v + m[2], m[3] * u + m[4] * v + m[5]
+
+	@staticmethod
+	def bend(k, t):
+		if not k:
+			return t
+		for (p0, q0), (p1, q1) in zip(k, k[1:]):
+			if t <= p1 or (p1, q1) == k[-1]:
+				return q0 + (t - p0) * (q1 - q0) / (p1 - p0)
+		return t
 
 	def map(self, u, v):
-		m = self.m
-		return m[0] * u + m[1] * v + m[2], m[3] * u + m[4] * v + m[5]
+		x, y = self.affine(self.m, u, v)
+		return self.affine(self.post, self.bend(self.kx, x), self.bend(self.ky, y))
 
 
 CAL = Calibration()

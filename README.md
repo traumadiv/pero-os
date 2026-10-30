@@ -77,7 +77,7 @@ curl -fsSLo /tmp/pero-update https://raw.githubusercontent.com/traumadiv/pero-os
   из `/lib/firmware/silead/mssl1680.fw`, размер панели (1920×1200, оси отражены) задаётся
   параметром ядра `i2c_touchscreen_props` в `/etc/default/grub.d/80-pero-touch.cfg`.
   Если касания идут мимо или зеркально: меню → Система → «Калибровка сенсора»
-  (`pero-touch-calibrate`), коснуться четырёх крестиков. Касания читаются прямо с сенсора,
+  (`pero-touch-calibrate`), коснуться девяти крестиков (до самых краёв). Касания читаются прямо с сенсора,
   поэтому калибровка работает, как бы криво ни шли касания до неё. Результат
   (`~/.config/pero/touch-calibration`) применяет `pero-touchd`, он же даёт жесты.
 * **Касания не туда / экран повёрнут боком.** Сдвиг поворота: `echo 1 > ~/.config/pero/rotation-offset`

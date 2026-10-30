@@ -1,11 +1,14 @@
 #!/usr/bin/python3
 """pero-touch-calibrate — four taps, and the touchscreen hits where the finger is.
 
-Shows a cross in each corner of the screen and reads the taps straight from the
-touchscreen device (not through X, so it works however wrong the current
-mapping is). The taps give the affine map from what the touchscreen reports to
-the screen: mirroring, swapped axes, offset and scale at once. pero-touchd
-applies it to every touch from then on.
+Shows nine crosses (corners, edge middles, centre; close to the edges) and
+reads the taps straight from the touchscreen device (not through X, so it
+works however wrong the current mapping is). The taps give
+  - an affine map from what the touchscreen reports to the screen: mirroring,
+    swapped axes, offset and scale at once;
+  - per axis, a piecewise-linear correction through the three columns / rows,
+    for Silead panels that squeeze their edges (the error grows toward an edge).
+pero-touchd applies both to every touch from then on.
 
   pero-touch-calibrate          calibrate (Esc cancels, gives up after a minute idle)
   pero-touch-calibrate --reset  forget the calibration
@@ -20,7 +23,8 @@ from evdev import ecodes as e
 SAVE = os.path.expanduser("~/.config/pero/touch-calibration")
 RAW_FLAG = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "pero-touch-raw")
 CLONE = "pero-touch"
-TARGETS = [(0.1, 0.1), (0.9, 0.1), (0.1, 0.9), (0.9, 0.9)]
+GRID = (0.04, 0.5, 0.96)   # close to the edges: that is where the panel bends
+TARGETS = [(x, y) for y in GRID for x in GRID]
 IDLE = 60   # s without taps before giving up
 
 
@@ -67,12 +71,6 @@ def invert(m):
 	return [ia, ib, -(ia * c + ib * g), id_, if_, -(id_ * c + if_ * g)]
 
 
-def compose(p, q):
-	"""p after q, both affine (a b c / d e f)."""
-	return [p[0] * q[0] + p[1] * q[3], p[0] * q[1] + p[1] * q[4], p[0] * q[2] + p[1] * q[5] + p[2],
-		p[3] * q[0] + p[4] * q[3], p[3] * q[1] + p[4] * q[4], p[3] * q[2] + p[4] * q[5] + p[5]]
-
-
 def solve(points):
 	"""Least-squares affine map (u, v) -> target over the tapped points."""
 	def row(k):
@@ -106,8 +104,46 @@ def cramer(s, r):
 	return out
 
 
-def fits(m, points, tol=0.06):
-	return max(abs(m[0] * u + m[1] * v + m[2] - tx) + abs(m[3] * u + m[4] * v + m[5] - ty)
+def knots(m, points, axis):
+	"""Piecewise-linear correction for one screen axis after the affine map m:
+	(where the affine map put a column / row, where it is) for each grid line."""
+	out = []
+	for g in GRID:
+		got = [(m[0] * u + m[1] * v + m[2], m[3] * u + m[4] * v + m[5])[axis]
+			for (u, v), t in points if abs(t[axis] - g) < 1e-6]
+		out.append((sum(got) / len(got), g))
+	out.sort()
+	# a fold (two grid lines in the wrong order) means a slipped tap
+	if any(b[0] - a[0] < 0.05 for a, b in zip(out, out[1:])):
+		return None
+	return out
+
+
+def bend(k, t):
+	"""Apply a knot list: linear between knots, the end segments extended."""
+	if not k:
+		return t
+	for (p0, q0), (p1, q1) in zip(k, k[1:]):
+		if t <= p1 or (p1, q1) == k[-1]:
+			return q0 + (t - p0) * (q1 - q0) / (p1 - p0)
+	return t
+
+
+def model(points):
+	m = solve(points)
+	if not m:
+		return None
+	kx, ky = knots(m, points, 0), knots(m, points, 1)
+	if not kx or not ky:
+		return None
+	return m, kx, ky
+
+
+def fits(mod, points, tol=0.05):
+	"""Every tap within tol of its cross after the full correction: a tap that
+	slipped would be the odd one out in its row or column."""
+	m, kx, ky = mod
+	return max(abs(bend(kx, m[0] * u + m[1] * v + m[2]) - tx) + abs(bend(ky, m[3] * u + m[4] * v + m[5]) - ty)
 		for (u, v), (tx, ty) in points) < tol
 
 
@@ -165,7 +201,7 @@ def calibrate(dev):
 	def tapped():
 		taps.append(((state["u"], state["v"]), TARGETS[len(taps)]))
 		if len(taps) == len(TARGETS):
-			m = solve(taps)
+			m = model(taps)
 			if m and fits(m, taps):
 				state["result"] = m
 				Gtk.main_quit()
@@ -237,12 +273,20 @@ def main():
 		return 1
 
 	# The taps measured device -> screen; X still applies its own matrix (rotation,
-	# output) after pero-touchd, so the stored mapping undoes that part
-	m = compose(invert(screen_matrix(dev.name)), m)
+	# output) after pero-touchd, so the stored mapping ends by undoing that part
+	m, kx, ky = m
+	post = invert(screen_matrix(dev.name))
+	lines = [
+		"m " + " ".join(f"{v:.6f}" for v in m),
+		"x " + " ".join(f"{p:.6f} {q:.6f}" for p, q in kx),
+		"y " + " ".join(f"{p:.6f} {q:.6f}" for p, q in ky),
+		"post " + " ".join(f"{v:.6f}" for v in post),
+	]
 	os.makedirs(os.path.dirname(SAVE), exist_ok=True)
 	with open(SAVE, "w") as f:
-		f.write(" ".join(f"{v:.6f}" for v in m) + "\n")
-	print("Калибровка сохранена:", " ".join(f"{v:.4f}" for v in m))
+		f.write("\n".join(lines) + "\n")
+	print("Калибровка сохранена:")
+	print("\n".join(lines))
 	if dev.name != CLONE:
 		print("pero-touchd не запущен: калибровка заработает, когда он запустится (после входа в систему).")
 	return 0
