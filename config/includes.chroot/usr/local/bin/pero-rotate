@@ -53,6 +53,8 @@ apply() {
 	idx=$(( (idx + $(offset)) % 4 ))
 	xrandr --output "$out" --rotate "${ROTS[$idx]}"
 	remap "$out"
+	# xfdesktop keeps the backdrop it drew for the old orientation
+	pgrep -u "$USER" -x xfdesktop >/dev/null && xfdesktop --reload >/dev/null 2>&1 &
 	echo "$1" >"$STATE"
 }
 

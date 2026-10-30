@@ -44,7 +44,7 @@ INC="$WORK/config.src/includes.chroot"
 echo ">>> Графика: обои, логотип"
 mkdir -p "$INC/usr/share/backgrounds/pero" "$INC/usr/share/pero" \
 	"$INC/usr/share/icons/hicolor/scalable/apps" "$INC/etc/calamares/branding/pero"
-rsvg-convert -w 1920 -h 1200 "$SRC/assets/wallpaper.svg" -o "$INC/usr/share/backgrounds/pero/pero-dark.png"
+rsvg-convert -w 1920 -h 1920 "$SRC/assets/wallpaper.svg" -o "$INC/usr/share/backgrounds/pero/pero-dark.png"
 cp "$SRC/assets/logo.svg" "$INC/usr/share/icons/hicolor/scalable/apps/pero-logo.svg"
 rsvg-convert -w 256 -h 256 "$SRC/assets/logo.svg" -o "$INC/etc/calamares/branding/pero/logo.png"
 rsvg-convert -w 96 -h 96 "$SRC/assets/logo.svg" -o "$INC/usr/share/pero/greeter-logo.png"

@@ -49,6 +49,21 @@ sudo ./build.sh
 5. Ярлык «Установить» на рабочем столе. Можно стереть весь eMMC или поставить рядом с Windows.
    Установка на eMMC занимает 10–20 минут. Пароль в живой системе: `live`.
 
+## Обновление установленной системы
+
+Скрипты, настройки, прошивку сенсора, обои и загрузчик Pero OS можно обновить без
+переустановки, одной командой (пакеты Debian обновляются как обычно, через apt):
+
+```bash
+sudo pero-update
+```
+
+На системе, где `pero-update` ещё нет:
+
+```bash
+curl -fsSLo /tmp/pero-update https://raw.githubusercontent.com/traumadiv/pero-os/main/config/includes.chroot/usr/local/sbin/pero-update && sudo bash /tmp/pero-update
+```
+
 ## Если что-то не работает
 
 * **Отчёт о железе** (меню → Система): собирает всё нужное в `~/pero-hwinfo.txt`.

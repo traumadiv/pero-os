@@ -1,6 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1200" width="1920" height="1200">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1920" width="1920" height="1920">
+  <!-- Square so the screen's "zoom" crop looks the same in landscape (keeps
+       y 360..1560) and in portrait (keeps x 360..1560): the strokes sit in the
+       band both orientations share. -->
   <defs>
-    <radialGradient id="bg" cx="0.28" cy="0.22" r="1.1">
+    <radialGradient id="bg" cx="0.28" cy="0.33" r="1.1">
       <stop offset="0" stop-color="#2b2b2b"/>
       <stop offset="0.55" stop-color="#161616"/>
       <stop offset="1" stop-color="#0b0b0b"/>
@@ -15,12 +18,12 @@
       <feColorMatrix values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.05 0"/>
     </filter>
   </defs>
-  <rect width="1920" height="1200" fill="url(#bg)"/>
+  <rect width="1920" height="1920" fill="url(#bg)"/>
   <!-- calligraphic ink strokes -->
-  <g fill="none" stroke="url(#ink)" stroke-linecap="round">
+  <g fill="none" stroke="url(#ink)" stroke-linecap="round" transform="translate(0 360)">
     <path stroke-width="3" d="M-40 860 C 380 700, 720 980, 1120 780 S 1760 520, 1980 640"/>
     <path stroke-width="1.5" d="M-40 900 C 400 760, 740 1020, 1140 830 S 1770 580, 1980 700"/>
     <path stroke-width="1" d="M-40 940 C 420 820, 760 1060, 1160 880 S 1780 640, 1980 760"/>
   </g>
-  <rect width="1920" height="1200" filter="url(#grain)"/>
+  <rect width="1920" height="1920" filter="url(#grain)"/>
 </svg>

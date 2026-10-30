@@ -1,0 +1,88 @@
+#!/bin/bash
+# pero-update — bring an installed Pero OS up to date with the GitHub repo:
+# Pero's own scripts and settings, touchscreen firmware, wallpaper, power
+# rules and the boot loader, without reinstalling. Debian packages are
+# updated as usual (apt / the update manager), not here.
+#
+#   sudo pero-update            from the main branch
+#   sudo pero-update <branch>   from another branch (to try fixes before merge)
+
+set -euo pipefail
+[ "$(id -u)" -ne 0 ] && exec sudo bash "$0" "$@"
+
+REPO=traumadiv/pero-os
+BRANCH=${1:-main}
+USER_NAME=${SUDO_USER:-$(id -un "${PKEXEC_UID:-0}" 2>/dev/null || echo root)}
+
+step() { printf '\n>>> %s\n' "$1"; }
+
+step "Скачиваю $REPO ($BRANCH)"
+TMP=$(mktemp -d)
+trap 'rm -rf "$TMP"' EXIT
+curl -fsSL "https://codeload.github.com/$REPO/tar.gz/refs/heads/$BRANCH" | tar -xz -C "$TMP" --strip-components=1
+SRC="$TMP/config/includes.chroot"
+[ -d "$SRC" ] || { echo "В архиве нет config/includes.chroot"; exit 1; }
+
+step "Файлы Pero OS"
+# The installer and the live session's own files have no business on an
+# installed system; /etc/skel only matters for new users (see below for yours).
+rsync -rlt --exclude=/etc/calamares/ --exclude=/usr/share/pero/calamares/ \
+	--exclude=/etc/skel/ --exclude=/usr/lib/firmware/silead/mssl1680.fw \
+	"$SRC/" /
+chmod 0755 /usr/local/bin/pero-* /usr/local/sbin/pero-* /usr/lib/pero/*.py \
+	/usr/lib/systemd/system-sleep/pero-radios
+install -m 0644 /usr/share/pero/zramswap /etc/default/zramswap
+
+step "Сенсор"
+FWDIR=/usr/lib/firmware/silead
+# A firmware the user installed with pero-touch-setup is a regular file: keep it
+if [ ! -e "$FWDIR/mssl1680.fw" ] || [ -L "$FWDIR/mssl1680.fw" ]; then
+	ln -sf gsl-alldocube-iwork10-pro.fw "$FWDIR/mssl1680.fw"
+	echo "mssl1680.fw → gsl-alldocube-iwork10-pro.fw"
+else
+	echo "Оставляю установленную вручную прошивку ($FWDIR/mssl1680.fw)"
+fi
+
+step "Питание"
+systemctl daemon-reload
+systemctl enable --now pero-power-source.service
+udevadm control --reload
+
+step "Обои"
+command -v rsvg-convert >/dev/null || apt-get install -y --no-install-recommends librsvg2-bin
+WP=/usr/share/backgrounds/pero/pero-dark.png
+mkdir -p "${WP%/*}"
+rsvg-convert -w 1920 -h 1920 "$TMP/assets/wallpaper.svg" -o "$WP"
+for f in /usr/share/backgrounds/xfce/xfce-shapes.svg /usr/share/backgrounds/xfce/xfce-x.svg; do
+	if [ -e "$f" ]; then cp "$WP" "$f"; fi
+done
+# The running desktop of the user who started the update
+if [ "$USER_NAME" != root ]; then
+	uid=$(id -u "$USER_NAME")
+	as_user() {
+		sudo -u "$USER_NAME" DISPLAY=:0 DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" "$@"
+	}
+	# Not fatal: without a running session the new wallpaper shows at next login
+	if as_user xfconf-query -c xfce4-desktop -l >/dev/null 2>&1; then
+		for p in $(as_user xfconf-query -c xfce4-desktop -l | grep '/last-image$'); do
+			as_user xfconf-query -c xfce4-desktop -p "$p" -s "$WP" || true
+			as_user xfconf-query -c xfce4-desktop -p "${p%/last-image}/image-style" -s 5 2>/dev/null ||
+				as_user xfconf-query -c xfce4-desktop -p "${p%/last-image}/image-style" -n -t int -s 5 || true
+		done
+		as_user xfdesktop --reload >/dev/null 2>&1 || true
+	fi
+fi
+
+step "Загрузчик"
+update-grub
+if [ "$(cat /sys/firmware/efi/fw_platform_size 2>/dev/null)" = 32 ] && mountpoint -q /boot/efi; then
+	id=debian
+	[ -d /boot/efi/EFI/debian ] || id=$(find /boot/efi/EFI -mindepth 1 -maxdepth 1 -type d \
+		! -iname boot ! -iname microsoft -printf '%f\n' | head -n1)
+	/usr/local/sbin/pero-grub-install --target=i386-efi --efi-directory=/boot/efi --bootloader-id="${id:-debian}"
+fi
+
+glib-compile-schemas /usr/share/glib-2.0/schemas
+
+step "Готово"
+echo "Перезагрузите планшет, чтобы применились сенсор и параметры ядра."
