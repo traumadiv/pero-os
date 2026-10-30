@@ -97,7 +97,7 @@ def cramer(s, r):
 def calibrate():
 	import gi
 	gi.require_version("Gtk", "3.0")
-	from gi.repository import Gdk, Gtk
+	from gi.repository import Gdk, GLib, Gtk
 
 	# Measure what the touchscreen reports on its own, in the normal orientation
 	set_matrix(IDENTITY)
@@ -111,7 +111,9 @@ def calibrate():
 	win.set_keep_above(True)
 	area = Gtk.DrawingArea()
 	win.add(area)
-	win.add_events(Gdk.EventMask.BUTTON_PRESS_MASK | Gdk.EventMask.KEY_PRESS_MASK)
+	win.add_events(Gdk.EventMask.BUTTON_PRESS_MASK | Gdk.EventMask.TOUCH_MASK
+		| Gdk.EventMask.KEY_PRESS_MASK)
+	last = {"t": 0}
 
 	def draw(widget, cr):
 		w, h = widget.get_allocated_width(), widget.get_allocated_height()
@@ -126,7 +128,7 @@ def calibrate():
 		cr.move_to((w - ext.width) / 2, h / 2)
 		cr.show_text(text)
 		cr.set_font_size(18)
-		hint = "Esc — отмена"
+		hint = "Esc — отмена (сама закроется через минуту без касаний)"
 		ext = cr.text_extents(hint)
 		cr.move_to((w - ext.width) / 2, h / 2 + 40)
 		cr.show_text(hint)
@@ -144,9 +146,13 @@ def calibrate():
 			cr.stroke()
 
 	def press(_w, ev):
-		src = ev.get_source_device()
-		if src is not None and src.get_source() != Gdk.InputSource.TOUCHSCREEN:
-			return True   # the dock's touchpad or a mouse would only spoil the result
+		# A touch can come as a touch event, as the pointer press X emulates
+		# from it, or both: one tap counts once
+		if ev.type == Gdk.EventType.TOUCH_BEGIN:
+			pass
+		elif ev.type != Gdk.EventType.BUTTON_PRESS or ev.time - last["t"] < 400:
+			return True
+		last["t"] = ev.time
 		w, h = win.get_allocated_width(), win.get_allocated_height()
 		if not w or not h:
 			return True
@@ -171,9 +177,24 @@ def calibrate():
 
 	area.connect("draw", draw)
 	win.connect("button-press-event", press)
+	win.connect("touch-event", press)
 	win.connect("key-press-event", key)
 	win.connect("destroy", Gtk.main_quit)
 	win.show_all()
+	# Nobody tapping (the touchscreen is dead, or no one is there): give up
+	# instead of leaving a full-screen window and a waiting pero-update
+	timer = {"id": None}
+	def idle_out():
+		Gtk.main_quit()
+		return False
+	def rearm(*_a):
+		if timer["id"]:
+			GLib.source_remove(timer["id"])
+		timer["id"] = GLib.timeout_add_seconds(60, idle_out)
+		return False
+	rearm()
+	win.connect_after("button-press-event", rearm)
+	win.connect_after("touch-event", rearm)
 	Gtk.main()
 	win.destroy()
 	return result.get("m")
