@@ -63,11 +63,42 @@ EOF
 	# FAT is case-insensitive; reuse whatever spelling is already there
 	boot=$(find "$esp/EFI/BOOT" -maxdepth 1 -iname bootia32.efi | head -n1)
 	cp "$tmp/grubia32.efi" "${boot:-$esp/EFI/BOOT/BOOTIA32.EFI}"
+
+	# Dual-boot firmware (Alldocube's Windows/Android menu) starts Windows by
+	# this fixed path. With no Windows left (no BCD), that entry boots Pero
+	# too; a real Windows boot manager is never touched.
+	ms="$esp/EFI/Microsoft/Boot"
+	if ! find "$ms" -maxdepth 1 -iname bcd 2>/dev/null | grep -q .; then
+		mkdir -p "$ms"
+		mgr=$(find "$ms" -maxdepth 1 -iname bootmgfw.efi | head -n1)
+		cp "$tmp/grubia32.efi" "${mgr:-$ms/bootmgfw.efi}"
+		cp "$tmp/early.cfg" "$ms/grub.cfg"
+	fi
 	rm -rf "$tmp"
 
 	mkdir -p "${STAMP%/*}"
 	{ echo "$esp $id"; md5sum "$GRUB/kernel.img" | cut -d' ' -f1; } >"$STAMP"
-	echo "pero-grub-install: standalone i386-efi loader in $esp/EFI/$id and EFI/BOOT (/boot UUID $uuid)" >&2
+	echo "pero-grub-install: standalone i386-efi loader in $esp/EFI/$id, EFI/BOOT and EFI/Microsoft/Boot (/boot UUID $uuid)" >&2
+}
+
+# Put Pero's entry (or the firmware's own "UEFI OS" fallback entry) first in
+# BootOrder. Best effort: this firmware often refuses variable writes, and the
+# order can always be set by hand in the BIOS Boot tab.
+boot_first() {
+	command -v efibootmgr >/dev/null || return 0
+	num=$(efibootmgr 2>/dev/null | awk -v id="$1" '
+		/^Boot[0-9A-Fa-f]{4}/ {
+			n = substr($1, 5, 4); sub(/\*$/, "", n)
+			l = tolower($0)
+			if (index(l, tolower(id)) || index(l, "pero")) { print n; exit }
+			if (!u && index(l, "uefi os")) u = n
+		}
+		END { if (u) print u }' | head -n1)
+	[ -n "$num" ] || return 0
+	order=$(efibootmgr 2>/dev/null | sed -n 's/^BootOrder: //p' | tr ',' '\n' | grep -vix "$num" | paste -sd, -)
+	efibootmgr -q -o "$num${order:+,$order}" 2>/dev/null &&
+		echo "pero-grub-install: Boot$num first in BootOrder" >&2
+	return 0
 }
 
 if [ "$1" = "--refresh" ]; then
@@ -97,4 +128,5 @@ if [ "$target" = i386-efi ]; then
 	standalone_ia32 "$efidir" "$id" ||
 		echo "pero-grub-install: kept grub-install's own loader" >&2
 fi
+case "$target" in *-efi) boot_first "${id:-debian}" ;; esac
 exit 0

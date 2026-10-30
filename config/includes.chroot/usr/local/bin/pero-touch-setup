@@ -25,7 +25,7 @@ TOOLS=/usr/share/pero/gsl-tools
 WORK=/var/lib/pero/touch
 FW=/lib/firmware/silead/mssl1680.fw
 STOCK_FW=gsl-alldocube-iwork10-pro.fw
-STOCK_SIZE="1920x1200"
+STOCK_SIZE="1920x1200 invert-x invert-y"
 GRUBCFG=/etc/default/grub.d/80-pero-touch.cfg
 mkdir -p "$WORK" /lib/firmware/silead
 
@@ -146,7 +146,7 @@ case "$1" in
 	rm -f "$FW" "$WORK/previous.fw" "$WORK/current"
 	[ -e "${FW%/*}/$STOCK_FW" ] && ln -s "$STOCK_FW" "$FW"
 	drop_gslx680
-	set_size "$STOCK_SIZE"
+	set_size $STOCK_SIZE
 	reload || true
 	echo "Вернул штатную прошивку и геометрию сенсора. Перезагрузите планшет."
 	exit 0
