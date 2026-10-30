@@ -52,14 +52,6 @@ rsvg-convert -w 1200 -h 560 "$SRC/assets/welcome.svg" -o "$INC/etc/calamares/bra
 rsvg-convert -w 1200 -h 560 "$SRC/assets/welcome.svg" -o "$INC/etc/calamares/branding/pero/slide1.png"
 rsvg-convert -w 800 -h 600 "$SRC/assets/grub-splash.svg" -o "$INC/usr/share/pero/grub-splash.png"
 
-echo ">>> Прошивки Silead (onitake/gsl-firmware)"
-GSL="$WORK/gsl-firmware"
-if [ -d "$GSL/.git" ]; then git -C "$GSL" pull -q --ff-only || true
-else git clone -q --depth 1 https://github.com/onitake/gsl-firmware "$GSL"; fi
-mkdir -p "$INC/usr/lib/firmware/silead" "$INC/usr/share/pero/gsl-tools"
-cp "$GSL"/firmware/linux/silead/*.fw "$INC/usr/lib/firmware/silead/"
-cp "$GSL"/tools/scanwindrv "$GSL"/tools/fwtool "$GSL"/tools/LICENSE "$INC/usr/share/pero/gsl-tools/"
-
 echo ">>> Игры: ядра libretro, которых нет в Debian (buildbot.libretro.com)"
 # PSP, PS1, DS, N64, Dreamcast, arcades. Downloads are cached in $WORK/libretro.
 BB=https://buildbot.libretro.com

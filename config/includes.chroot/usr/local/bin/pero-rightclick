@@ -1,0 +1,4 @@
+#!/bin/sh
+# pero-rightclick — long press / two-finger tap = right click.
+# See /usr/lib/pero/pero-rightclick.py
+exec /usr/bin/python3 /usr/lib/pero/pero-rightclick.py "$@"

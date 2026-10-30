@@ -27,22 +27,22 @@ step "Файлы Pero OS"
 # The installer and the live session's own files have no business on an
 # installed system; /etc/skel only matters for new users (see below for yours).
 rsync -rlt --exclude=/etc/calamares/ --exclude=/usr/share/pero/calamares/ \
-	--exclude=/etc/skel/ --exclude=/usr/lib/firmware/silead/mssl1680.fw \
-	"$SRC/" /
+	--exclude=/etc/skel/ "$SRC/" /
+# Gone from Pero OS: the firmware picker, its tools and the old gesture daemon
+rm -f /usr/local/bin/pero-touch-setup /usr/share/applications/pero-touch-setup.desktop \
+	/usr/local/bin/pero-touchd /usr/lib/pero/pero-touchd.py /etc/xdg/autostart/pero-touchd.desktop \
+	/usr/lib/firmware/silead/gsl-alldocube-iwork10-pro.fw /etc/default/grub.d/90-pero-touch.cfg \
+	/etc/modprobe.d/pero-no-gslx680.conf
+rm -rf /usr/share/pero/gsl-tools /var/lib/pero/touch
+pkill -x -f '/usr/bin/python3 /usr/lib/pero/pero-touchd.py' || true
 chmod 0755 /usr/local/bin/pero-* /usr/local/sbin/pero-* /usr/lib/pero/*.py \
 	/usr/lib/systemd/system-sleep/pero-radios
 install -m 0644 /usr/share/pero/zramswap /etc/default/zramswap
 
 step "Сенсор"
-FWDIR=/usr/lib/firmware/silead
-# A firmware the user installed with pero-touch-setup is a regular file: keep it
-if [ ! -e "$FWDIR/mssl1680.fw" ] || [ -L "$FWDIR/mssl1680.fw" ]; then
-	ln -sf gsl-alldocube-iwork10-pro.fw "$FWDIR/mssl1680.fw"
-	echo "mssl1680.fw → gsl-alldocube-iwork10-pro.fw"
-else
-	echo "Оставляю установленную вручную прошивку ($FWDIR/mssl1680.fw)"
-	echo "Вернуть штатную прошивку iWork 10 Pro: sudo pero-touch-setup --undo"
-fi
+# Stock Silead setup: the firmware sits where the kernel's silead driver looks
+# for it (copied by rsync above), the panel geometry is a kernel parameter
+ls -l /usr/lib/firmware/silead/mssl1680.fw
 
 step "Питание"
 systemctl daemon-reload

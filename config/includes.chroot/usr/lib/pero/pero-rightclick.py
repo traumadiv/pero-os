@@ -1,13 +1,16 @@
 #!/usr/bin/python3
-"""pero-touchd — touch gestures X11 has no answer for on its own.
+"""pero-rightclick — right click with a finger, which X11 has no answer for.
 
   long press (0.6 s, finger still)      right click
   two-finger tap                        right click
-  swipe in from the right screen edge   quick settings (pero-panel)
 
-Each touchscreen is grabbed and replayed through a uinput clone. A new touch is
-held back only until it is clear what it is: a tap or a drag goes through at
-once (with everything buffered so far), a gesture is swallowed.
+The touchscreen itself is the stock Silead one (kernel silead driver), this
+only sits in front of it: each touchscreen is grabbed and replayed through a
+uinput clone. Without the grab X would already have turned the touch into a
+left press, and the left release after the right click would pick the first
+menu item. A new touch is held back only until it is clear what it is: a tap
+or a drag goes through at once (with everything buffered so far), a right
+click is swallowed. Turn it off in Settings → Session and Startup.
 """
 import asyncio
 import os
@@ -20,11 +23,9 @@ from evdev import ecodes as e
 
 HOLD = 0.6     # s, long press
 SLOP = 0.015   # travel (fraction of the screen) that still counts as standing still
-EDGE = 0.03    # a swipe starts this close to the right edge
-SWIPE = 0.06   # and has to come in this far
 TAP2 = 0.5     # s, two-finger tap
 
-CLONE = "pero-touch"
+CLONE = "pero-rightclick"
 ROT_STATE = os.path.expanduser("~/.config/pero/rotation-current")
 DEBUG = os.environ.get("PERO_TOUCH_DEBUG") == "1"
 
@@ -152,9 +153,7 @@ class Touch:
 			self.t0, self.most = time.monotonic(), n
 			self.screen.update()
 			first = self.first()
-			self.x0 = self.screen.norm(first[2], first[3])[0] if first else 0
 			self.last = (first[2], first[3]) if first else (0, 0)
-			self.edge = self.x0 > 1 - EDGE
 			self.timer = asyncio.get_running_loop().call_later(HOLD, self.hold)
 			return
 
@@ -171,16 +170,6 @@ class Touch:
 			first = self.first()
 			if first and first[0] is not None:
 				self.last = (first[0], first[1])
-			if self.edge and self.most == 1 and first:
-				x = self.screen.norm(first[0], first[1])[0]
-				if self.x0 - x >= SWIPE:
-					self.drop()
-					self.state = self.SWALLOW
-					self.cancel()
-					subprocess.Popen(["pero-panel"], start_new_session=True)
-				elif x > self.x0 + SLOP or self.moved(across=True):
-					self.flush()
-				return
 			if self.moved():
 				self.flush()
 			return
@@ -192,15 +181,15 @@ class Touch:
 		live = [s for s in self.slots.values() if s[2] is not None]
 		return live[0] if live else None
 
-	def moved(self, across=False):
-		"""Some finger travelled more than SLOP (only up/down when across)."""
+	def moved(self):
+		"""Some finger travelled more than SLOP."""
 		for s in self.slots.values():
 			if s[2] is None:
 				continue
 			du, dv = s[0] - s[2], s[1] - s[3]
 			m = self.screen.m
 			dx, dy = m[0] * du + m[1] * dv, m[3] * du + m[4] * dv
-			if (abs(dy) if across else max(abs(dx), abs(dy))) > (SWIPE if across else SLOP):
+			if max(abs(dx), abs(dy)) > SLOP:
 				return True
 		return False
 
