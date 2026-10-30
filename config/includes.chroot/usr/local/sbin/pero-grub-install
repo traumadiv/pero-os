@@ -81,11 +81,29 @@ EOF
 	echo "pero-grub-install: standalone i386-efi loader in $esp/EFI/$id, EFI/BOOT and EFI/Microsoft/Boot (/boot UUID $uuid)" >&2
 }
 
+# Remove boot entries whose partition is gone, like Android's after "erase
+# disk": the firmware keeps offering them in its OS menu. Only entries that
+# name a GPT partition by UUID are judged; firmware built-ins are left alone.
+drop_stale() {
+	parts=$(lsblk -rno PARTUUID 2>/dev/null | tr 'A-F' 'a-f')
+	esp_uuid=$(findmnt -no SOURCE "${efidir:-/boot/efi}" 2>/dev/null | xargs -r lsblk -no PARTUUID 2>/dev/null | tr 'A-F' 'a-f')
+	# Without a trustworthy partition list nothing is "missing"
+	[ -n "$esp_uuid" ] && echo "$parts" | grep -qx "$esp_uuid" || return 0
+	efibootmgr -v 2>/dev/null | sed -n 's/^Boot\([0-9A-Fa-f]\{4\}\)\*\{0,1\} \(.*\)HD([0-9]*,GPT,\([0-9A-Fa-f-]*\),.*/\1 \3 \2/p' |
+		while read -r n uuid label; do
+			echo "$parts" | grep -qx "$(echo "$uuid" | tr 'A-F' 'a-f')" && continue
+			efibootmgr -q -b "$n" -B 2>/dev/null &&
+				echo "pero-grub-install: removed stale boot entry Boot$n ($label)" >&2
+		done
+	return 0
+}
+
 # Put Pero's entry (or the firmware's own "UEFI OS" fallback entry) first in
 # BootOrder. Best effort: this firmware often refuses variable writes, and the
 # order can always be set by hand in the BIOS Boot tab.
 boot_first() {
 	command -v efibootmgr >/dev/null || return 0
+	drop_stale
 	num=$(efibootmgr 2>/dev/null | awk -v id="$1" '
 		/^Boot[0-9A-Fa-f]{4}/ {
 			n = substr($1, 5, 4); sub(/\*$/, "", n)
