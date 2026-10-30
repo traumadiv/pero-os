@@ -1,0 +1,6 @@
+[Unit]
+Description=Pero OS: log battery, voltage and temperature
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/pero-power-log

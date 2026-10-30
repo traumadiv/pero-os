@@ -1,0 +1,38 @@
+#!/bin/sh
+# pero-power-log — one line a minute about power and heat, in
+# /var/log/pero-power.log (last ~2 days kept). When the tablet switches itself
+# off, the last lines show what led up to it: the charge dropping to 0 in a
+# jump (the AXP288 gauge misreading), the voltage sagging (a worn battery,
+# the PMIC cuts the power on its own), or the temperature climbing.
+
+LOG=/var/log/pero-power.log
+bat=
+for s in /sys/class/power_supply/*; do
+	[ "$(cat "$s/type" 2>/dev/null)" = Battery ] && { bat=$s; break; }
+done
+[ -n "$bat" ] || exit 0
+
+ac=0
+for s in /sys/class/power_supply/*; do
+	[ "$(cat "$s/type" 2>/dev/null)" = Battery ] && continue
+	[ "$(cat "$s/online" 2>/dev/null)" = 1 ] && ac=1
+done
+
+temp=0
+for z in /sys/class/thermal/thermal_zone*/temp; do
+	t=$(cat "$z" 2>/dev/null) || continue
+	[ "${t:-0}" -gt "$temp" ] && temp=$t
+done
+
+v() { cat "$bat/$1" 2>/dev/null || echo -; }
+# µV / µA in sysfs to mV / mA; "-" when the gauge does not report it
+milli() { n=$(cat "$bat/$1" 2>/dev/null | tr -dc 0-9-); [ -n "$n" ] && echo $(( n / 1000 )) || echo -; }
+printf '%s cap=%s%% status=%s ac=%s volt=%smV curr=%smA temp=%sC load=%s\n' \
+	"$(date '+%F %T')" "$(v capacity)" "$(v status)" "$ac" "$(milli voltage_now)" "$(milli current_now)" \
+	"$(( temp / 1000 ))" "$(cut -d' ' -f1 /proc/loadavg)" >>"$LOG"
+
+# keep it small: ~2 days of minutes
+if [ "$(wc -l <"$LOG")" -gt 3200 ]; then
+	tail -n 2880 "$LOG" >"$LOG.tmp" && mv "$LOG.tmp" "$LOG"
+fi
+exit 0

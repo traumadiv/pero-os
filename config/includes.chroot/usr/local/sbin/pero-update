@@ -56,7 +56,9 @@ ls -l /usr/lib/firmware/silead/mssl1680.fw
 
 step "Питание"
 systemctl daemon-reload
-systemctl enable --now pero-power-source.service || true
+systemctl enable --now pero-power-source.service pero-power-log.timer || true
+# journal kept across reboots: a tablet that switched itself off can tell why
+systemctl restart systemd-journald 2>/dev/null || true
 systemctl reset-failed pero-power-source.service 2>/dev/null || true
 # logind rereads its config on SIGHUP (no restart under a running session)
 systemctl kill -s HUP systemd-logind 2>/dev/null || true
@@ -81,6 +83,11 @@ if [ "$USER_NAME" != root ]; then
 		done
 		as_user xfdesktop --reload >/dev/null 2>&1 || true
 	fi
+	# On "critical" charge sleep, not power off: the AXP288 gauge can jump to a
+	# few percent with charge left, and sleeping keeps the work
+	as_user xfconf-query -c xfce4-power-manager -p /xfce4-power-manager/critical-power-action \
+		-n -t uint -s 1 2>/dev/null ||
+		as_user xfconf-query -c xfce4-power-manager -p /xfce4-power-manager/critical-power-action -s 1 2>/dev/null || true
 	# The lid is logind's (which ignores it): turning the tablet over put it to sleep
 	as_user xfconf-query -c xfce4-power-manager -p /xfce4-power-manager/logind-handle-lid-switch \
 		-n -t bool -s true 2>/dev/null ||

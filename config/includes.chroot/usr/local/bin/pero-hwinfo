@@ -72,6 +72,10 @@ section() { printf '\n===== %s =====\n' "$1"; }
 	done
 	powerprofilesctl get 2>&1
 
+	section "Power log (last hour) and how the last boot ended"
+	tail -n 60 /var/log/pero-power.log 2>/dev/null
+	journalctl -b -1 -n 30 --no-pager 2>/dev/null
+
 	section "Sleep / idle"
 	echo "mem_sleep: $(cat /sys/power/mem_sleep 2>/dev/null)"
 	mount -t debugfs none /sys/kernel/debug 2>/dev/null
