@@ -83,6 +83,16 @@ if [ "$USER_NAME" != root ]; then
 		done
 		as_user xfdesktop --reload >/dev/null 2>&1 || true
 	fi
+	# A tap selects, a double tap opens (single-click opening made icons hard to drag)
+	xset_prop() {   # channel property type value
+		as_user xfconf-query -c "$1" -p "$2" -s "$4" 2>/dev/null ||
+			as_user xfconf-query -c "$1" -p "$2" -n -t "$3" -s "$4" 2>/dev/null || true
+	}
+	xset_prop xfce4-desktop /desktop-icons/single-click bool false
+	xset_prop thunar /misc-single-click bool false
+	xset_prop xsettings /Net/DoubleClickTime int 500
+	xset_prop xsettings /Net/DoubleClickDistance int 40
+	xset_prop xsettings /Net/DndDragThreshold int 16
 	# On "critical" charge sleep, not power off: the AXP288 gauge can jump to a
 	# few percent with charge left, and sleeping keeps the work
 	as_user xfconf-query -c xfce4-power-manager -p /xfce4-power-manager/critical-power-action \

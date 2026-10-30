@@ -6,6 +6,12 @@
     <property name="IconThemeName" type="string" value="Papirus-Dark"/>
     <property name="EnableEventSounds" type="bool" value="false"/>
     <property name="EnableInputFeedbackSounds" type="bool" value="false"/>
+    <!-- Fingers: a tap selects, a double tap opens. Two taps of a finger land
+         further apart and slower than two mouse clicks; a drag starts only once
+         the finger has clearly moved, not on its wobble. -->
+    <property name="DoubleClickTime" type="int" value="500"/>
+    <property name="DoubleClickDistance" type="int" value="40"/>
+    <property name="DndDragThreshold" type="int" value="16"/>
   </property>
   <property name="Xft" type="empty">
     <!-- 10.1" 1920x1200 ≈ 224 ppi: 144 dpi gives a comfortable 1.5x for touch -->
