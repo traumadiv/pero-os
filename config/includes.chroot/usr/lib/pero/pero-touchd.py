@@ -323,7 +323,17 @@ class Touch:
 		self.state = self.IDLE
 
 
+def reset_x_calibration():
+	"""Calibration is done here, before X sees the touch. A libinput calibration
+	matrix left in X (older Pero versions set one) would apply on top of it and
+	can pin every touch to one spot, so X's own goes back to identity."""
+	for dev in run("xinput", "list", "--id-only").split():
+		if "libinput Calibration Matrix" in run("xinput", "list-props", dev):
+			run("xinput", "set-prop", dev, "libinput Calibration Matrix", *"1 0 0 0 1 0 0 0 1".split())
+
+
 async def main():
+	reset_x_calibration()
 	screen = Screen()
 	running = {}
 	remapped = False
@@ -350,6 +360,7 @@ async def main():
 			# the clone is a new X input device: map it to the screen like the real one
 			await asyncio.sleep(1)
 			run("pero-rotate", "remap")
+			reset_x_calibration()
 			screen.stamp = None
 			remapped = True
 		await asyncio.sleep(3)
