@@ -17,6 +17,13 @@ for s in /sys/class/power_supply/*; do
 	[ "$(cat "$s/type" 2>/dev/null)" = Battery ] && continue
 	[ "$(cat "$s/online" 2>/dev/null)" = 1 ] && ac=1
 done
+# which supplies there are and what they say, once per boot (for the gauge question)
+if [ ! -e /run/pero-power-log.seen ]; then
+	for s in /sys/class/power_supply/*; do
+		echo "# $(basename "$s"): type=$(cat "$s/type" 2>/dev/null) online=$(cat "$s/online" 2>/dev/null) present=$(cat "$s/present" 2>/dev/null)"
+	done >>"$LOG"
+	touch /run/pero-power-log.seen
+fi
 
 temp=0
 for z in /sys/class/thermal/thermal_zone*/temp; do

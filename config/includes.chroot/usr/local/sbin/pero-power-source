@@ -12,7 +12,11 @@ command -v powerprofilesctl >/dev/null || exit 0
 
 online=0
 for s in /sys/class/power_supply/*; do
-	[ "$(cat "$s/type" 2>/dev/null)" = Battery ] && continue
+	if [ "$(cat "$s/type" 2>/dev/null)" = Battery ]; then
+		# the AXP288 charger can say offline while it charges: trust the battery
+		case "$(cat "$s/status" 2>/dev/null)" in Charging|Full) online=1 ;; esac
+		continue
+	fi
 	[ "$(cat "$s/online" 2>/dev/null)" = 1 ] && online=1
 done
 profile=power-saver
