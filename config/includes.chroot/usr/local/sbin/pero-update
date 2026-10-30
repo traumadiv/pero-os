@@ -16,6 +16,15 @@ USER_NAME=${SUDO_USER:-$(id -un "${PKEXEC_UID:-0}" 2>/dev/null || echo root)}
 
 step() { printf '\n>>> %s\n' "$1"; }
 
+# Things to do in the running desktop of the user who started the update
+as_user() {
+	[ "$USER_NAME" != root ] || return 1
+	local uid home
+	uid=$(id -u "$USER_NAME") home=$(getent passwd "$USER_NAME" | cut -d: -f6)
+	sudo -u "$USER_NAME" DISPLAY=:0 XAUTHORITY="$home/.Xauthority" \
+		DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" "$@"
+}
+
 step "Скачиваю $REPO ($BRANCH)"
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
@@ -32,9 +41,11 @@ rsync -rlt --exclude=/etc/calamares/ --exclude=/usr/share/pero/calamares/ \
 rm -f /usr/local/bin/pero-touch-setup /usr/share/applications/pero-touch-setup.desktop \
 	/usr/local/bin/pero-touchd /usr/lib/pero/pero-touchd.py /etc/xdg/autostart/pero-touchd.desktop \
 	/usr/lib/firmware/silead/gsl-alldocube-iwork10-pro.fw /etc/default/grub.d/90-pero-touch.cfg \
-	/etc/modprobe.d/pero-no-gslx680.conf
+	/etc/modprobe.d/pero-no-gslx680.conf /etc/xdg/autostart/pero-rightclick.desktop
 rm -rf /usr/share/pero/gsl-tools /var/lib/pero/touch
-pkill -x -f '/usr/bin/python3 /usr/lib/pero/pero-touchd.py' || true
+# The finger right click sat between the touchscreen and X and cut touches
+# short; the touchscreen now goes to X straight from the silead driver
+pkill -f '/usr/lib/pero/pero-(touchd|rightclick).py' || true
 chmod 0755 /usr/local/bin/pero-* /usr/local/sbin/pero-* /usr/lib/pero/*.py \
 	/usr/lib/systemd/system-sleep/pero-radios
 install -m 0644 /usr/share/pero/zramswap /etc/default/zramswap
@@ -59,10 +70,6 @@ for f in /usr/share/backgrounds/xfce/xfce-shapes.svg /usr/share/backgrounds/xfce
 done
 # The running desktop of the user who started the update
 if [ "$USER_NAME" != root ]; then
-	uid=$(id -u "$USER_NAME")
-	as_user() {
-		sudo -u "$USER_NAME" DISPLAY=:0 DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" "$@"
-	}
 	# Not fatal: without a running session the new wallpaper shows at next login
 	if as_user xfconf-query -c xfce4-desktop -l >/dev/null 2>&1; then
 		for p in $(as_user xfconf-query -c xfce4-desktop -l | grep '/last-image$'); do
@@ -84,6 +91,16 @@ if [ "$(cat /sys/firmware/efi/fw_platform_size 2>/dev/null)" = 32 ] && mountpoin
 fi
 
 glib-compile-schemas /usr/share/glib-2.0/schemas
+
+step "Калибровка сенсора"
+if grep -qs '^MSSL' /sys/bus/acpi/devices/*/hid && as_user true 2>/dev/null; then
+	echo "На экране появятся 4 крестика: коснитесь пальцем центра каждого."
+	if m=$(as_user /usr/local/bin/pero-touch-calibrate --print); then
+		/usr/local/bin/pero-touch-calibrate --save "$m"
+	else
+		echo "Пропущено. Позже: меню → Система → «Калибровка сенсора»."
+	fi
+fi
 
 step "Готово"
 echo "Перезагрузите планшет, чтобы применились сенсор и параметры ядра."

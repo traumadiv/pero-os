@@ -1,8 +1,0 @@
-[Desktop Entry]
-Type=Application
-Name=Pero finger right click
-Name[ru]=Правый клик пальцем
-Exec=pero-rightclick
-NoDisplay=true
-OnlyShowIn=XFCE;
-X-XFCE-Autostart-Override=true

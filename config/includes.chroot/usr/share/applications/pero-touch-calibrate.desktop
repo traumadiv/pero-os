@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Touchscreen calibration
+Name[ru]=Калибровка сенсора
+Comment=Tap four crosses so touches land under the finger
+Comment[ru]=Коснуться четырёх крестиков, чтобы касания попадали под палец
+Exec=pero-touch-calibrate
+Icon=input-touchscreen
+Terminal=false
+Categories=System;Settings;

@@ -1,0 +1,4 @@
+#!/bin/sh
+# pero-touch-calibrate — tap four crosses, the touchscreen hits where the finger is.
+# See /usr/lib/pero/pero-touch-calibrate.py
+exec /usr/bin/python3 /usr/lib/pero/pero-touch-calibrate.py "$@"
