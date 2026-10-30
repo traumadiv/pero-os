@@ -1,4 +1,6 @@
 #!/bin/sh
 # pero-touchd — touch gestures: long press / two-finger tap = right click,
-# swipe in from the right edge = quick settings. See /usr/lib/pero/pero-touchd.py
-exec /usr/bin/python3 /usr/lib/pero/pero-touchd.py "$@"
+# swipe in from the right edge = quick settings, calibration, touch ripple.
+# See /usr/lib/pero/pero-touchd.py. Errors go to ~/.cache/pero-touchd.log.
+mkdir -p "$HOME/.cache"
+exec /usr/bin/python3 /usr/lib/pero/pero-touchd.py "$@" 2>>"$HOME/.cache/pero-touchd.log"

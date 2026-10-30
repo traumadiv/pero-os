@@ -71,8 +71,18 @@ class Calibration:
 		self.kx = self.ky = None
 		self.raw = False
 
+	@staticmethod
+	def measuring():
+		"""pero-touch-calibrate is running and measuring (its flag holds its pid; a
+		flag left behind by one that died does not count)."""
+		try:
+			pid = int(open(RAW_FLAG).read().strip() or 0)
+		except (OSError, ValueError):
+			return False
+		return pid > 0 and os.path.exists(f"/proc/{pid}")
+
 	def update(self):
-		stamp = os.path.exists(RAW_FLAG)
+		stamp = self.measuring()
 		for path in CALIBRATION:
 			try:
 				stamp = (stamp, path, os.stat(path).st_mtime)
@@ -83,7 +93,7 @@ class Calibration:
 			return
 		self.stamp = stamp
 		self.reset()
-		self.raw = os.path.exists(RAW_FLAG)
+		self.raw = self.measuring()
 		if self.raw or not isinstance(stamp, tuple):
 			return
 		try:
@@ -410,7 +420,22 @@ def reset_x_calibration():
 			run("xinput", "set-prop", dev, "libinput Calibration Matrix", *"1 0 0 0 1 0 0 0 1".split())
 
 
+def only_instance():
+	"""One pero-touchd per user. One started by pero-update, or left from an
+	earlier session, would keep the touchscreen grabbed: this one could not take
+	it, and touches would go through the old one's calibration or none."""
+	me = os.getpid()
+	for pid in run("pgrep", "-u", str(os.getuid()), "-f", "pero-touchd.py").split():
+		if int(pid) != me:
+			try:
+				os.kill(int(pid), 15)
+			except OSError:
+				pass
+	time.sleep(0.5)
+
+
 async def main():
+	only_instance()
 	reset_x_calibration()
 	screen = Screen()
 	running = {}

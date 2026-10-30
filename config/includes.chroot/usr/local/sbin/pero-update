@@ -56,7 +56,10 @@ ls -l /usr/lib/firmware/silead/mssl1680.fw
 
 step "Питание"
 systemctl daemon-reload
-systemctl enable --now pero-power-source.service
+systemctl enable --now pero-power-source.service || true
+systemctl reset-failed pero-power-source.service 2>/dev/null || true
+# logind rereads its config on SIGHUP (no restart under a running session)
+systemctl kill -s HUP systemd-logind 2>/dev/null || true
 udevadm control --reload
 
 step "Обои"
@@ -78,6 +81,10 @@ if [ "$USER_NAME" != root ]; then
 		done
 		as_user xfdesktop --reload >/dev/null 2>&1 || true
 	fi
+	# The lid is logind's (which ignores it): turning the tablet over put it to sleep
+	as_user xfconf-query -c xfce4-power-manager -p /xfce4-power-manager/logind-handle-lid-switch \
+		-n -t bool -s true 2>/dev/null ||
+		as_user xfconf-query -c xfce4-power-manager -p /xfce4-power-manager/logind-handle-lid-switch -s true 2>/dev/null || true
 fi
 
 step "Загрузчик"

@@ -317,11 +317,15 @@ def main():
 
 	# Measure in the normal orientation, with pero-touchd passing positions as they are
 	subprocess.run(["pero-rotate", "normal"], capture_output=True)
-	open(RAW_FLAG, "w").close()
+	with open(RAW_FLAG, "w") as f:
+		f.write(str(os.getpid()))   # pero-touchd ignores the flag once this pid is gone
 	try:
 		m = calibrate(dev)
 	finally:
-		os.remove(RAW_FLAG)
+		try:
+			os.remove(RAW_FLAG)
+		except FileNotFoundError:
+			pass
 	if not m:
 		print("Калибровка отменена, всё осталось как было", file=sys.stderr)
 		return 1
