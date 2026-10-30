@@ -5,6 +5,9 @@
   two-finger tap                        right click
   swipe in from the right screen edge   quick settings (pero-panel)
 
+and a soft ripple under the finger on every new touch (pero-ripple;
+touch ~/.config/pero/no-ripple to turn it off).
+
 Each touchscreen is grabbed and replayed through a uinput clone. A new touch is
 held back only until it is clear what it is: a tap or a drag goes through at
 once (with everything buffered so far), a gesture is swallowed.
@@ -124,6 +127,35 @@ class Calibration:
 
 
 CAL = Calibration()
+
+
+class Ripples:
+	"""Feeds touch positions to pero-ripple, started on first use."""
+
+	OFF = os.path.expanduser("~/.config/pero/no-ripple")
+
+	def __init__(self):
+		self.proc = None
+
+	def send(self, x, y):
+		if os.path.exists(self.OFF):
+			return
+		for _attempt in range(2):
+			if self.proc is None or self.proc.poll() is not None:
+				try:
+					self.proc = subprocess.Popen(["/usr/bin/python3", "/usr/lib/pero/pero-ripple.py"],
+						stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+				except OSError:
+					return
+			try:
+				self.proc.stdin.write(f"{x} {y}\n".encode())
+				self.proc.stdin.flush()
+				return
+			except (BrokenPipeError, OSError):
+				self.proc = None
+
+
+RIPPLE = Ripples()
 
 
 class Screen:
@@ -274,6 +306,8 @@ class Touch:
 			CAL.update()
 			self.screen.update()
 			first = self.first()
+			if first:
+				RIPPLE.send(*self.screen.pixels(first[2], first[3]))
 			self.x0 = self.screen.norm(first[2], first[3])[0] if first else 0
 			self.last = (first[2], first[3]) if first else (0, 0)
 			self.edge = self.x0 > 1 - EDGE
