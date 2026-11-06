@@ -1,0 +1,8 @@
+[Unit]
+Description=Pero OS: full CPU speed while video or a game plays
+# play and pause come often: never stop starting it
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+ExecStart=/usr/local/sbin/pero-cpu-boost

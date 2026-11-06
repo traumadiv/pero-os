@@ -52,23 +52,20 @@ rsvg-convert -w 1200 -h 560 "$SRC/assets/welcome.svg" -o "$INC/etc/calamares/bra
 rsvg-convert -w 1200 -h 560 "$SRC/assets/welcome.svg" -o "$INC/etc/calamares/branding/pero/slide1.png"
 rsvg-convert -w 800 -h 600 "$SRC/assets/grub-splash.svg" -o "$INC/usr/share/pero/grub-splash.png"
 
-echo ">>> Игры: ядра libretro, которых нет в Debian (buildbot.libretro.com)"
-# PSP, PS1, DS, N64, Dreamcast, arcades. Downloads are cached in $WORK/libretro.
+echo ">>> Игры: ядра libretro, которых нет в Debian"
+# PSP, PS1, DS, N64, Dreamcast, arcades and a light NES core: the bundle pinned
+# to libretro stable 1.20.0 (tools/make-cores.sh), the same one pero-update
+# installs. Cached in $WORK/cores.
+sh "$INC/usr/local/sbin/pero-cores" --root "$INC" --cache "$WORK/cores"
+
+# On-screen gamepad and gamepad profiles: data, not code, from the buildbot assets
 BB=https://buildbot.libretro.com
 LR="$WORK/libretro"
-mkdir -p "$LR" "$INC/usr/lib/x86_64-linux-gnu/libretro" "$INC/usr/share/libretro/overlays" \
-	"$INC/usr/share/libretro/autoconfig" "$INC/etc/skel/.config/retroarch/system"
-for core in ppsspp pcsx_rearmed melonds mupen64plus_next flycast fbneo; do
-	z="$LR/${core}_libretro.so.zip"
-	[ -s "$z" ] || curl -fsSL -o "$z" "$BB/nightly/linux/x86_64/latest/${core}_libretro.so.zip"
-	unzip -qo "$z" -d "$INC/usr/lib/x86_64-linux-gnu/libretro/"
-done
-for f in system/PPSSPP frontend/overlays frontend/autoconfig; do
+mkdir -p "$LR" "$INC/usr/share/libretro/overlays" "$INC/usr/share/libretro/autoconfig"
+for f in frontend/overlays frontend/autoconfig; do
 	z="$LR/$(basename $f).zip"
 	[ -s "$z" ] || curl -fsSL -o "$z" "$BB/assets/$f.zip"
 done
-# PPSSPP needs its font/flash0 files in the RetroArch system folder
-unzip -qo "$LR/PPSSPP.zip" -d "$INC/etc/skel/.config/retroarch/system/"
 # One on-screen gamepad is enough for a tablet
 unzip -qo "$LR/overlays.zip" 'gamepads/neo-retropad/*' -d "$INC/usr/share/libretro/overlays/"
 unzip -qo "$LR/autoconfig.zip" 'udev/*' -d "$INC/usr/share/libretro/autoconfig/"

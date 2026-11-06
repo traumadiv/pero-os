@@ -62,7 +62,11 @@ rsync -rlt --exclude=/etc/calamares/ --exclude=/usr/share/pero/calamares/ \
 chmod 0755 /usr/local/bin/pero-* /usr/local/sbin/pero-* /usr/lib/pero/*.py \
 	/usr/lib/systemd/system-sleep/pero-radios
 install -m 0644 /usr/share/pero/zramswap /etc/default/zramswap
-command -v vainfo >/dev/null || apt-get install -y --no-install-recommends vainfo || true
+# vainfo for the hardware report, libopengl0 for the melonDS DS core,
+# mpv-mpris and playerctl so playing video raises the clocks (pero-media-boost)
+for p in vainfo libopengl0 mpv-mpris playerctl; do
+	dpkg -s "$p" >/dev/null 2>&1 || apt-get install -y --no-install-recommends "$p" || true
+done
 
 step "Сенсор"
 # Stock Silead setup: the firmware sits where the kernel's silead driver looks
@@ -71,7 +75,8 @@ ls -l /usr/lib/firmware/silead/mssl1680.fw
 
 step "Питание"
 systemctl daemon-reload
-systemctl enable --now pero-power-source.service pero-power-log.timer || true
+systemd-tmpfiles --create /usr/lib/tmpfiles.d/pero-boost.conf 2>/dev/null || true
+systemctl enable --now pero-power-source.service pero-power-log.timer pero-cpu-boost.path || true
 systemctl disable --now apt-daily.timer apt-daily-upgrade.timer 2>/dev/null || true
 # thermald switched the tablet off on battery: a sensor of the AXP288 PMIC reads
 # "critical" there at 45 °C. The kernel's own thermal trips still protect it.
@@ -143,6 +148,11 @@ if [ "$(cat /sys/firmware/efi/fw_platform_size 2>/dev/null)" = 32 ] && mountpoin
 fi
 
 glib-compile-schemas /usr/share/glib-2.0/schemas
+
+step "Игры: ядра libretro"
+# Pinned to libretro stable 1.20.0; nothing to do when this bundle is installed.
+# A failed download is not worth stopping the update: the old cores keep working.
+sh /usr/local/sbin/pero-cores || echo "Ядра не обновились, попробуйте позже: sudo pero-cores"
 
 step "Сенсор: pero-touchd и калибровка"
 if as_user xinput list >/dev/null 2>&1; then

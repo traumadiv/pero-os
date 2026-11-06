@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Pero video speed
+Exec=pero-media-boost
+NoDisplay=true
+OnlyShowIn=XFCE;
+X-XFCE-Autostart-Override=true

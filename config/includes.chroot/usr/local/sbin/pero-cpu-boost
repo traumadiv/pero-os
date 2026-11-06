@@ -1,0 +1,59 @@
+#!/bin/sh
+# pero-cpu-boost — full CPU and GPU speed while something asks for it.
+#
+# The Atom x5-Z8350 has no hardware P-states, so power-profiles-daemon has no
+# lever on it: "performance" changes nothing, and schedutil lets the clock sag
+# between frames, which is what made 1080p video and games stutter.
+#
+# Any user process asks for speed by creating /run/pero-boost/<its pid>
+# (pero-media-boost while a player plays, pero-games while a game runs).
+# pero-cpu-boost.path starts this service when the folder is not empty; it
+# holds the "performance" governor and a raised GPU floor while at least one
+# of those pids is alive, then puts everything back and exits.
+
+D=/run/pero-boost
+SAVE=/run/pero-boost.saved
+
+alive() {
+	n=0
+	for f in "$D"/*; do
+		[ -e "$f" ] || continue
+		p=${f##*/}
+		case "$p" in *[!0-9]* | '') rm -f "$f"; continue ;; esac
+		if [ -d "/proc/$p" ]; then n=$((n + 1)); else rm -f "$f"; fi
+	done
+	[ "$n" -gt 0 ]
+}
+
+boost() {
+	: >"$SAVE"
+	for g in /sys/devices/system/cpu/cpu[0-9]*/cpufreq/scaling_governor; do
+		[ -w "$g" ] || continue
+		echo "$g $(cat "$g")" >>"$SAVE"
+		echo performance >"$g" 2>/dev/null
+	done
+	# i915: keep the GPU at its efficient frequency at least, not at idle
+	for c in /sys/class/drm/card[0-9]; do
+		[ -w "$c/gt_min_freq_mhz" ] && [ -r "$c/gt_RP1_freq_mhz" ] || continue
+		echo "$c/gt_min_freq_mhz $(cat "$c/gt_min_freq_mhz")" >>"$SAVE"
+		cat "$c/gt_RP1_freq_mhz" >"$c/gt_min_freq_mhz" 2>/dev/null
+	done
+}
+
+restore() {
+	[ -s "$SAVE" ] || return 0
+	while read -r f v; do
+		echo "$v" >"$f" 2>/dev/null
+	done <"$SAVE"
+	rm -f "$SAVE"
+}
+
+trap 'restore' EXIT
+trap 'exit 0' INT TERM HUP
+
+alive || exit 0
+boost
+while alive; do
+	sleep 3
+done
+exit 0

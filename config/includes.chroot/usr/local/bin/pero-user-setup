@@ -4,7 +4,7 @@
 # accounts made by an older Pero OS, after pero-update. Bump VERSION when a
 # step is added: each runs again only for accounts that have not had it.
 
-VERSION=1
+VERSION=2
 STAMP="$HOME/.config/pero/user-setup"
 [ "$(cat "$STAMP" 2>/dev/null)" = "$VERSION" ] && exit 0
 
@@ -25,6 +25,11 @@ for a in blueman print-applet; do
 done
 pkill -x blueman-applet 2>/dev/null
 pkill -f system-config-printer-applet 2>/dev/null
+
+# 2: a full-screen video skips the compositor (one copy of every frame less)
+set_prop xfwm4 /general/unredirect_overlays bool true
+# 2: playing video raises the clocks; the autostart entry covers the next login
+pgrep -u "$(id -u)" -f pero-media-boost >/dev/null || setsid -f pero-media-boost >/dev/null 2>&1
 
 mkdir -p "${STAMP%/*}"
 echo "$VERSION" >"$STAMP"

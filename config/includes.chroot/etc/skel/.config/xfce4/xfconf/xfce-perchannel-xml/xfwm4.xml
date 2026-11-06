@@ -8,6 +8,7 @@
     <property name="button_layout" type="string" value="O|HMC"/>
     <property name="use_compositing" type="bool" value="true"/>
     <property name="vblank_mode" type="string" value="glx"/>
+    <property name="unredirect_overlays" type="bool" value="true"/>
     <property name="show_frame_shadow" type="bool" value="true"/>
     <property name="show_popup_shadow" type="bool" value="true"/>
     <property name="placement_ratio" type="int" value="100"/>

@@ -22,3 +22,9 @@ pref("media.hardware-video-decoding.force-enabled", true);
 pref("media.av1.enabled", false);
 pref("media.mediasource.vp9.enabled", false);
 pref("gfx.webrender.all", true);
+// Decoded frames stay on the GPU (DMA-BUF through EGL): copying every 1080p
+// frame through the Atom's memory was the other half of the stutter
+pref("widget.dmabuf.force-enabled", true);
+pref("gfx.x11-egl.force-enabled", true);
+// Play and pause go out over MPRIS: pero-media-boost raises the clocks on play
+pref("media.hardwaremediakeys.enabled", true);

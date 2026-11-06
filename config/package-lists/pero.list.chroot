@@ -179,6 +179,7 @@ keyutils
 # ---- Games: RetroArch + cores from Debian (the rest come from the libretro buildbot in build.sh) ----
 retroarch
 libretro-core-info
+libopengl0
 libretro-nestopia
 libretro-snes9x
 libretro-gambatte
@@ -187,4 +188,6 @@ libretro-genesisplusgx
 
 # ---- Cinema: TorrServer (downloaded in build.sh) + mpv ----
 mpv
+mpv-mpris
+playerctl
 vainfo

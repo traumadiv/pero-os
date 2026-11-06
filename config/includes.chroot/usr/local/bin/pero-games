@@ -10,11 +10,25 @@ done
 LOG="$HOME/.cache/retroarch"
 mkdir -p "$LOG"
 
+# PPSSPP's fonts and system dialogs must match the PPSSPP core: refresh the
+# user's copy whenever pero-cores installed a different bundle
+SYS="$HOME/.config/retroarch/system"
+SHARED=/usr/share/pero/retroarch-system
+if [ -d "$SHARED/PPSSPP" ] && ! cmp -s "$SHARED/VERSION" "$SYS/.pero-cores"; then
+	mkdir -p "$SYS"
+	rm -rf "$SYS/PPSSPP"
+	cp -r "$SHARED/PPSSPP" "$SYS/" && cp "$SHARED/VERSION" "$SYS/.pero-cores"
+fi
+
 # pero-touchd lets touches straight through while this pid is alive: the
 # on-screen gamepad must not wait for gestures (a held button became a right click)
 FLAG="${XDG_RUNTIME_DIR:-/tmp}/pero-game"
 echo $$ >"$FLAG"
-trap 'rm -f "$FLAG"' EXIT
+# Full CPU and GPU clocks for the game's lifetime (pero-cpu-boost): the
+# "performance" profile below does nothing on this Atom
+BOOST=/run/pero-boost/$$
+[ -d /run/pero-boost ] && : >"$BOOST"
+trap 'rm -f "$FLAG" "$BOOST"' EXIT
 trap 'exit 130' INT TERM HUP
 
 set -- retroarch --appendconfig=/etc/pero/retroarch.cfg "$@"

@@ -1,0 +1,62 @@
+#!/bin/sh
+# pero-cores — put the pinned libretro cores in place (see tools/make-cores.sh).
+#
+#   pero-cores [--root DIR] [--cache DIR]
+#
+# The bundle named in /usr/share/pero/cores.sha256 is downloaded from the
+# GitHub release "cores-<version>" (or taken from --cache), checked against
+# that checksum and unpacked: cores into the libretro folder, PPSSPP's files
+# into /usr/share/pero/retroarch-system (pero-games copies them to the user).
+# Nothing happens when that bundle is already installed. Used by build.sh
+# (--root = the image) and by pero-update.
+
+set -eu
+ROOT=
+CACHE=/var/cache/pero
+while [ $# -gt 0 ]; do
+	case "$1" in
+		--root) ROOT=$2; shift 2 ;;
+		--cache) CACHE=$2; shift 2 ;;
+		*) echo "pero-cores: unknown option $1" >&2; exit 2 ;;
+	esac
+done
+
+SUMS="$ROOT/usr/share/pero/cores.sha256"
+STAMP="$ROOT/usr/share/pero/cores-installed"
+NAME=$(awk '{print $2; exit}' "$SUMS")
+VER=${NAME#pero-cores-}
+VER=${VER%.tar.xz}
+URL="https://github.com/traumadiv/pero-os/releases/download/cores-$VER/$NAME"
+
+if cmp -s "$SUMS" "$STAMP"; then
+	echo "Ядра $VER уже стоят"
+	exit 0
+fi
+
+mkdir -p "$CACHE"
+if ! (cd "$CACHE" && sha256sum -c --status "$SUMS" 2>/dev/null); then
+	echo "Скачиваю ядра $VER"
+	curl -fL --retry 3 -o "$CACHE/$NAME.part" "$URL"
+	mv "$CACHE/$NAME.part" "$CACHE/$NAME"
+	(cd "$CACHE" && sha256sum -c --status "$SUMS") || {
+		echo "pero-cores: контрольная сумма $NAME не совпала" >&2
+		rm -f "$CACHE/$NAME"
+		exit 1
+	}
+fi
+
+TMP=$(mktemp -d)
+trap 'rm -rf "$TMP"' EXIT
+tar -xJf "$CACHE/$NAME" -C "$TMP"
+
+LIB="$ROOT/usr/lib/x86_64-linux-gnu/libretro"
+SYS="$ROOT/usr/share/pero/retroarch-system"
+mkdir -p "$LIB" "$SYS"
+install -m 0644 "$TMP"/libretro/*.so "$LIB/"
+# melonDS (needs Nintendo's BIOS) gave way to melonDS DS (has a free one)
+rm -f "$LIB/melonds_libretro.so"
+rm -rf "$SYS/PPSSPP"
+cp -r "$TMP/system/PPSSPP" "$SYS/"
+cp "$TMP/VERSION" "$SYS/VERSION"
+cp "$SUMS" "$STAMP"
+echo "Ядра $VER на месте: $(ls "$TMP"/libretro | sed 's/_libretro.so//' | tr '\n' ' ')"

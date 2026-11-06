@@ -1,0 +1,24 @@
+#!/bin/sh
+# pero-media-boost — ask pero-cpu-boost for full speed while any player plays.
+# Firefox (YouTube and any site) and mpv (with mpv-mpris) report play and pause
+# over MPRIS; playerctl follows them. Paused or closed: back to normal clocks.
+
+command -v playerctl >/dev/null || exit 0
+H=/run/pero-boost/$$
+
+off() { rm -f "$H"; }
+check() {
+	if playerctl -a status 2>/dev/null | grep -qx Playing; then
+		[ -d /run/pero-boost ] && [ ! -e "$H" ] && : >"$H"
+	else
+		off
+	fi
+}
+
+trap 'off' EXIT
+trap 'exit 0' INT TERM HUP
+
+check
+playerctl -a -F status 2>/dev/null | while read -r _; do
+	check
+done

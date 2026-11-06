@@ -47,7 +47,10 @@ Carlito/Caladea вместо Calibri/Cambria. Evince для чтения PDF, Xo
 
 **Интернет и видео.** Firefox ESR с прокруткой пальцем. Видео декодирует видеокарта
 (VA-API): YouTube отдаёт H.264, который Cherry Trail тянет аппаратно, а не VP9/AV1,
-которые процессору не по силам.
+которые процессору не по силам. Кадры не копируются через процессор (DMA-BUF), а пока
+видео играет в Firefox или mpv, процессор и видеокарта держат полную частоту
+(`pero-cpu-boost`): у этого Atom нет режимов питания, и без этого 1080p дёргался. mpv
+масштабирует картинку быстрым фильтром, H.265 декодирует на всех четырёх ядрах.
 
 **Планшет.** Быстрые настройки справа: Wi-Fi, Bluetooth, режим полёта, автоповорот,
 экономия, «не беспокоить», яркость, громкость, экран и выключение. Автоповорот экрана,
@@ -151,11 +154,21 @@ curl -fsSLo /tmp/pero-update https://raw.githubusercontent.com/traumadiv/pero-os
 <summary><b>Игры вылетают или тормозят</b></summary>
 
 `pero-games` запускает RetroArch с `/etc/pero/retroarch.cfg` поверх ваших настроек: без
-многопоточного видео (частая причина вылетов на Intel), со звуком через PipeWire.
-Журнал последнего запуска: `~/.cache/retroarch/retroarch.log`, при вылете придёт
+многопоточного видео (частая причина вылетов на Intel), звук через PipeWire, ядро не может
+переключить RetroArch на Vulkan, а без нужного BIOS игра не стартует и пишет, чего не
+хватает. Журнал последнего запуска: `~/.cache/retroarch/retroarch.log`, при вылете придёт
 уведомление.
+
+Ядра, которых нет в Debian, взяты из стабильной сборки libretro 1.20.0, той же версии, что
+и сам RetroArch, и одинаковы на всех планшетах. Ставит и обновляет их `sudo pero-cores`,
+его же вызывает `pero-update`. Обновление ядер из меню RetroArch выключено: ночные сборки
+и были главной причиной вылетов.
+
 Пока игра открыта, касания идут в неё напрямую: без жестов, правого клика и круга-отклика,
 иначе кнопки экранного геймпада срабатывали с задержкой.
+
+BIOS кладётся в `~/.config/retroarch/system`. PS1, PSP, DS и Dreamcast запускаются и без
+него. Аркадам Neo Geo нужен `neogeo.zip` рядом с играми.
 
 Тормозит: оставьте родное разрешение и включите пропуск кадров в настройках ядра.
 Тяжёлые игры PSP, N64 и Dreamcast планшету не по силам. PS2, GameCube, 3DS и Vita не
@@ -214,6 +227,7 @@ config/includes.chroot/ файлы поверх системы: скрипты p
 config/hooks/           донастройка внутри образа
 assets/                 логотип, обои, экран приветствия (SVG)
 docs/                   скриншоты для этого README
+tools/                  сборка набора ядер libretro
 test/                   проверка ISO в QEMU (32- и 64-битный UEFI)
 build.sh / build.ps1    сборка
 ```
@@ -221,7 +235,9 @@ build.sh / build.ps1    сборка
 ## Откуда что
 
 Debian, XFCE, Calamares, LibreOffice, Firefox ESR, RetroArch и ядра из Debian ставятся
-пакетами. Ядра PPSSPP, PCSX ReARMed, melonDS, Mupen64Plus-Next, Flycast и FBNeo
-скачиваются при сборке с buildbot.libretro.com; FBNeo только для некоммерческого
+пакетами. Ядра PPSSPP, PCSX ReARMed, melonDS DS, Mupen64Plus-Next, Flycast, FBNeo и
+FCEUmm собраны `tools/make-cores.sh` из стабильной сборки libretro 1.20.0, лежат в релизе
+[`cores-1.20.0`](https://github.com/traumadiv/pero-os/releases/tag/cores-1.20.0) и
+сверяются по `usr/share/pero/cores.sha256`; FBNeo только для некоммерческого
 использования. [TorrServer](https://github.com/YouROK/TorrServer) (GPL-3.0) скачивается
 при сборке с его релизов.

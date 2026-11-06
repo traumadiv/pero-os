@@ -1,0 +1,10 @@
+[Unit]
+Description=Pero OS: watch for requests for full CPU speed
+
+[Path]
+DirectoryNotEmpty=/run/pero-boost
+MakeDirectory=yes
+DirectoryMode=1777
+
+[Install]
+WantedBy=multi-user.target
