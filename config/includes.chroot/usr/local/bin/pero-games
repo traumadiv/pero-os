@@ -10,6 +10,13 @@ done
 LOG="$HOME/.cache/retroarch"
 mkdir -p "$LOG"
 
+# pero-touchd lets touches straight through while this pid is alive: the
+# on-screen gamepad must not wait for gestures (a held button became a right click)
+FLAG="${XDG_RUNTIME_DIR:-/tmp}/pero-game"
+echo $$ >"$FLAG"
+trap 'rm -f "$FLAG"' EXIT
+trap 'exit 130' INT TERM HUP
+
 set -- retroarch --appendconfig=/etc/pero/retroarch.cfg "$@"
 # Not every machine offers "performance" (VMs, some firmware): then just run
 if powerprofilesctl list 2>/dev/null | grep -q 'performance:'; then

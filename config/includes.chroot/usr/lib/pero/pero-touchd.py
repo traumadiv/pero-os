@@ -37,6 +37,9 @@ CALIBRATION = [os.path.expanduser("~/.config/pero/touch-calibration"), "/etc/per
 RAW_FLAG = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "pero-touch-raw")
 ROT_STATE = os.path.expanduser("~/.config/pero/rotation-current")
 DEBUG = os.environ.get("PERO_TOUCH_DEBUG") == "1"
+# pero-games writes its pid here while a game runs: the on-screen gamepad needs
+# every touch at once, not held back for gestures, and no ripple over the game
+GAME = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "pero-game")
 
 
 def run(*cmd):
@@ -137,6 +140,14 @@ class Calibration:
 
 
 CAL = Calibration()
+
+
+def game_running():
+	try:
+		with open(GAME) as f:
+			return os.path.exists("/proc/" + f.read().strip())
+	except (OSError, ValueError):
+		return False
 
 
 class Ripples:
@@ -309,6 +320,9 @@ class Touch:
 
 		if self.state == self.IDLE:
 			if n == 0:
+				self.flush()
+				return
+			if game_running():
 				self.flush()
 				return
 			self.state = self.PENDING
