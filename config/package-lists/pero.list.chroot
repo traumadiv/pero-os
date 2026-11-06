@@ -187,3 +187,4 @@ libretro-genesisplusgx
 
 # ---- Cinema: TorrServer (downloaded in build.sh) + mpv ----
 mpv
+vainfo

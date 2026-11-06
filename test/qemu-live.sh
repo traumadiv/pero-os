@@ -25,7 +25,7 @@ start)
 	# iso "none": boot the installed system from the disk
 	CD=(-cdrom "$2" -boot d)
 	[ "$2" = none ] && CD=()
-	qemu-system-x86_64 -machine q35 -accel tcg -m 3072 -smp 4 \
+	qemu-system-x86_64 -machine q35 -accel tcg -m ${MEM:-3072} -smp 4 \
 		-drive if=pflash,format=raw,readonly=on,file="$CODE" \
 		-drive if=pflash,format=raw,file="$RUN/vars.fd" \
 		"${CD[@]}" "${DISK[@]}" \

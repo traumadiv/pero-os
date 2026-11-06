@@ -1,0 +1,5 @@
+[Desktop Entry]
+Type=Application
+Name=print-applet
+# Pero OS: off. The quick settings panel has Bluetooth; a tablet has no printer tray
+Hidden=true

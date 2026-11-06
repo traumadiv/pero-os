@@ -1,0 +1,13 @@
+{
+  "policies": {
+    "Handlers": {
+      "schemes": {
+        "magnet": { "action": "useSystemDefault", "ask": false }
+      },
+      "mimeTypes": {
+        "audio/x-mpegurl": { "action": "useSystemDefault", "ask": false },
+        "application/x-bittorrent": { "action": "useSystemDefault", "ask": false }
+      }
+    }
+  }
+}

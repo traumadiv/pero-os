@@ -1,14 +1,25 @@
 #!/bin/sh
 # pero-games — RetroArch with the "performance" power profile held while it runs.
 # Cherry Trail drops its clocks fast on the balanced profile, which costs PSP/N64 games.
+# /etc/pero/retroarch.cfg goes on top of the user's settings: what keeps it stable.
 
 GAMES="$HOME/Игры"
 for d in NES SNES "Game Boy" GBA "Sega" PS1 PSP "Nintendo DS" N64 Dreamcast "Аркады"; do
 	mkdir -p "$GAMES/$d"
 done
+LOG="$HOME/.cache/retroarch"
+mkdir -p "$LOG"
 
+set -- retroarch --appendconfig=/etc/pero/retroarch.cfg "$@"
 # Not every machine offers "performance" (VMs, some firmware): then just run
 if powerprofilesctl list 2>/dev/null | grep -q 'performance:'; then
-	exec powerprofilesctl launch -p performance -r "Игры" -- retroarch "$@"
+	set -- powerprofilesctl launch -p performance -r "Игры" -- "$@"
 fi
-exec retroarch "$@"
+"$@"
+code=$?
+# Killed by a signal (crash): say so instead of just vanishing
+if [ "$code" -gt 128 ]; then
+	notify-send -i retroarch "Игры закрылись с ошибкой" \
+		"Журнал: ~/.cache/retroarch/retroarch.log — его соберёт «Отчёт о железе»" 2>/dev/null
+fi
+exit "$code"

@@ -4,9 +4,15 @@
 SUBSYSTEM=="power_supply", ACTION=="change", ENV{POWER_SUPPLY_ONLINE}=="?", \
 	RUN+="/usr/bin/systemd-run --no-block --quiet /usr/local/sbin/pero-power-source"
 
-# Runtime power management: idle PCI devices power down
-SUBSYSTEM=="pci", ACTION=="add", ATTR{power/control}="auto"
+# Runtime power management: idle PCI devices power down, except the USB
+# controller (class 0c03): asleep, it misses a flash drive being plugged in
+SUBSYSTEM=="pci", ACTION=="add", ATTR{class}!="0x0c03*", ATTR{power/control}="auto"
+SUBSYSTEM=="pci", ACTION=="add", ATTR{class}=="0x0c03*", ATTR{power/control}="on"
 # Idle USB devices suspend, except input devices: a sleeping dock keyboard or
 # touchpad drops the first keystroke or tap
 SUBSYSTEM=="usb", ACTION=="add", ENV{DEVTYPE}=="usb_device", ATTR{power/control}="auto"
 SUBSYSTEM=="usb", ACTION=="add", ENV{ID_USB_INTERFACES}=="*:03*", ATTR{power/control}="on"
+# nor hubs (09) and flash drives / card readers (08): a suspended hub misses
+# new devices, and many cheap flash drives drop off when woken
+SUBSYSTEM=="usb", ACTION=="add", ENV{ID_USB_INTERFACES}=="*:09*", ATTR{power/control}="on"
+SUBSYSTEM=="usb", ACTION=="add", ENV{ID_USB_INTERFACES}=="*:08*", ATTR{power/control}="on"

@@ -320,7 +320,7 @@ class Panel(Gtk.Application):
 
 		self.tiles = [
 			Tile(self, "network-wireless-symbolic", "Wi-Fi", wifi_state, wifi_toggle, more=("nm-connection-editor",)),
-			Tile(self, "bluetooth-active-symbolic", "Bluetooth", bt_state, bt_toggle, more=("blueman-manager",)),
+			Tile(self, "bluetooth-active-symbolic", "Bluetooth", bt_state, bt_toggle, more=("sh", "-c", "pgrep -x blueman-applet >/dev/null || setsid -f blueman-applet; exec blueman-manager")),
 			Tile(self, "airplane-mode-symbolic", "Режим полёта", airplane_state, airplane_toggle),
 			Tile(self, "rotation-allowed-symbolic", "Автоповорот", rotation_state, rotation_toggle),
 			Tile(self, "power-profile-power-saver-symbolic", "Экономия", saver_state, saver_toggle),

@@ -1,0 +1,30 @@
+#!/bin/sh
+# pero-user-setup — settings that live in the user's home, brought up to date
+# once at login (autostart). New users get them from /etc/skel; this catches up
+# accounts made by an older Pero OS, after pero-update. Bump VERSION when a
+# step is added: each runs again only for accounts that have not had it.
+
+VERSION=1
+STAMP="$HOME/.config/pero/user-setup"
+[ "$(cat "$STAMP" 2>/dev/null)" = "$VERSION" ] && exit 0
+
+set_prop() {   # channel property type value
+	xfconf-query -c "$1" -p "$2" -s "$4" 2>/dev/null ||
+		xfconf-query -c "$1" -p "$2" -n -t "$3" -s "$4" 2>/dev/null
+}
+
+# 1: flash drives mounted and opened when plugged in
+for p in automount-drives automount-media autobrowse; do
+	set_prop thunar-volman "/$p/enabled" bool true
+done
+# 1: no Bluetooth and printer tray applets (the quick settings panel has
+# Bluetooth and starts blueman-applet itself for pairing)
+mkdir -p "$HOME/.config/autostart"
+for a in blueman print-applet; do
+	cp /etc/skel/.config/autostart/$a.desktop "$HOME/.config/autostart/"
+done
+pkill -x blueman-applet 2>/dev/null
+pkill -f system-config-printer-applet 2>/dev/null
+
+mkdir -p "${STAMP%/*}"
+echo "$VERSION" >"$STAMP"
