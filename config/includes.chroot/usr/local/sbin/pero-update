@@ -64,7 +64,7 @@ chmod 0755 /usr/local/bin/pero-* /usr/local/sbin/pero-* /usr/lib/pero/*.py \
 install -m 0644 /usr/share/pero/zramswap /etc/default/zramswap
 # vainfo for the hardware report, libopengl0 for the melonDS DS core,
 # mpv-mpris and playerctl so playing video raises the clocks (pero-media-boost)
-for p in vainfo libopengl0 mpv-mpris playerctl; do
+for p in vainfo libopengl0 mpv-mpris playerctl xz-utils; do
 	dpkg -s "$p" >/dev/null 2>&1 || apt-get install -y --no-install-recommends "$p" || true
 done
 

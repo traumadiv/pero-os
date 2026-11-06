@@ -36,7 +36,7 @@ fi
 mkdir -p "$CACHE"
 if ! (cd "$CACHE" && sha256sum -c --status "$SUMS" 2>/dev/null); then
 	echo "Скачиваю ядра $VER"
-	curl -fL --retry 3 -o "$CACHE/$NAME.part" "$URL"
+	curl -fL# --retry 3 -o "$CACHE/$NAME.part" "$URL"
 	mv "$CACHE/$NAME.part" "$CACHE/$NAME"
 	(cd "$CACHE" && sha256sum -c --status "$SUMS") || {
 		echo "pero-cores: контрольная сумма $NAME не совпала" >&2
@@ -47,7 +47,14 @@ fi
 
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
-tar -xJf "$CACHE/$NAME" -C "$TMP"
+# tar needs the xz program for .tar.xz, and xz-utils is not in every Pero OS
+# (it is not a base package): then Python, which has xz built in, unpacks it
+if command -v xz >/dev/null; then
+	tar -xJf "$CACHE/$NAME" -C "$TMP"
+else
+	python3 -c 'import sys, tarfile; tarfile.open(sys.argv[1]).extractall(sys.argv[2], filter="data")' \
+		"$CACHE/$NAME" "$TMP"
+fi
 
 LIB="$ROOT/usr/lib/x86_64-linux-gnu/libretro"
 SYS="$ROOT/usr/share/pero/retroarch-system"
